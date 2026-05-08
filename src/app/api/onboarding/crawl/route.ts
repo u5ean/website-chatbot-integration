@@ -3,6 +3,8 @@ import { crawlWebsite } from '@/lib/crawler';
 import { extractBusinessInfo } from '@/lib/extractor';
 import { createClient } from '@/lib/supabase/server';
 
+export const runtime = 'nodejs';
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();

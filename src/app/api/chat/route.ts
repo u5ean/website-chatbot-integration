@@ -2,12 +2,29 @@ import { NextResponse } from 'next/server';
 import { openai, generateEmbedding } from '@/lib/openai';
 import { createAdminClient } from '@/lib/supabase/server';
 
+function corsHeaders(req: Request) {
+  const origin = req.headers.get('origin') ?? '*';
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+export async function OPTIONS(req: Request) {
+  return new Response(null, { status: 204, headers: corsHeaders(req) });
+}
+
 export async function POST(req: Request) {
   try {
     const { chatbotId, message, sessionId } = await req.json();
 
     if (!chatbotId || !message) {
-      return NextResponse.json({ error: 'Chatbot ID and message are required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Chatbot ID and message are required' },
+        { status: 400, headers: corsHeaders(req) }
+      );
     }
 
     const supabase = await createAdminClient();
@@ -20,7 +37,7 @@ export async function POST(req: Request) {
       .single();
 
     if (configError || !config) {
-      return NextResponse.json({ error: 'Chatbot not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Chatbot not found' }, { status: 404, headers: corsHeaders(req) });
     }
 
     // 2. RAG: Search for relevant context
@@ -32,7 +49,13 @@ export async function POST(req: Request) {
       p_chatbot_id: chatbotId
     });
 
-    const context = chunks?.map((c: any) => c.content).join('\n\n') || '';
+    const context =
+      chunks
+        ?.map((c: any) => {
+          const source = c.source_url ? `Source: ${c.source_url}\n` : '';
+          return `${source}${c.content}`;
+        })
+        .join('\n\n---\n\n') || '';
 
     // 3. Prepare or Get Session
     let currentSessionId = sessionId;
@@ -72,6 +95,12 @@ export async function POST(req: Request) {
           content: `You are a helpful AI assistant for a website. 
           Use the following context to answer the user's questions. 
           If you don't know the answer based on the context, say you don't know but try to be helpful.
+          Format responses in concise Markdown (short paragraphs, bullet lists, and code blocks when helpful).
+          If you used the provided context, end your answer with a "Sources:" section formatted exactly like:
+          Sources:
+          - [Short title](https://example.com/page)
+          Use one bullet per source. Do not split URLs across lines.
+          Only include source URLs that appear in the provided context. Do not invent links.
           
           Tone: ${config.tone || 'professional'}
           Persona Name: ${config.persona_name || 'Assistant'}
@@ -114,6 +143,7 @@ export async function POST(req: Request) {
 
     return new Response(stream, {
       headers: {
+        ...corsHeaders(req),
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
@@ -121,6 +151,9 @@ export async function POST(req: Request) {
     });
   } catch (error: any) {
     console.error('Chat API error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500, headers: corsHeaders(req) }
+    );
   }
 }

@@ -1,7 +1,6 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { URL } from 'url';
-import https from 'https';
 
 export interface CrawledPage {
   url: string;
@@ -9,15 +8,187 @@ export interface CrawledPage {
   content: string;
 }
 
-const httpsAgent = new https.Agent({
-  rejectUnauthorized: false, // Help with some SSL issues in local dev
-});
+type FetchMode = 'direct' | 'playwright' | 'zenrows'
+
+type FetchResult =
+  | { ok: true; html: string; finalUrl: string; mode: FetchMode; status: number }
+  | { ok: false; error: unknown; mode: FetchMode; status?: number }
+
+function normalizeUrl(input: string) {
+  const u = new URL(input);
+  u.hash = '';
+  u.search = '';
+  return u.toString();
+}
+
+function isProbablyBotBlock(html: string) {
+  const h = html.toLowerCase();
+  return (
+    h.includes('cloudflare') ||
+    h.includes('attention required') ||
+    h.includes('just a moment') ||
+    h.includes('verify you are human') ||
+    h.includes('captcha') ||
+    h.includes('access denied') ||
+    h.includes('request blocked')
+  );
+}
+
+function shouldEscalateToPlaywright(res: { status?: number; html?: string }) {
+  if (res.status && [401, 403, 406, 409, 423, 429, 451, 503].includes(res.status)) return true;
+  if (res.html && (res.html.trim().length < 800 || isProbablyBotBlock(res.html))) return true;
+  return false;
+}
+
+async function fetchHtmlDirect(url: string): Promise<FetchResult> {
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      timeout: 30000,
+      maxRedirects: 5,
+      validateStatus: () => true,
+    });
+
+    const html = typeof response.data === 'string' ? response.data : String(response.data ?? '');
+    return { ok: true, html, finalUrl: response.request?.res?.responseUrl ?? url, mode: 'direct', status: response.status };
+  } catch (error: any) {
+    const status = error?.response?.status;
+    return { ok: false, error, mode: 'direct', status };
+  }
+}
+
+async function fetchHtmlPlaywright(url: string): Promise<FetchResult> {
+  try {
+    const { chromium } = await import('playwright');
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const page = await browser.newPage();
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.waitForTimeout(1000);
+      const html = await page.content();
+      const finalUrl = page.url();
+      return { ok: true, html, finalUrl, mode: 'playwright', status: 200 };
+    } finally {
+      await browser.close();
+    }
+  } catch (error) {
+    return { ok: false, error, mode: 'playwright' };
+  }
+}
+
+async function fetchHtmlZenrows(url: string): Promise<FetchResult> {
+  const apiKey = process.env.ZENROWS_API_KEY;
+  if (!apiKey) {
+    return {
+      ok: false,
+      error: new Error('Missing ZENROWS_API_KEY environment variable'),
+      mode: 'zenrows',
+    };
+  }
+
+  try {
+    const endpoint = new URL('https://api.zenrows.com/v1/');
+    endpoint.searchParams.set('apikey', apiKey);
+    endpoint.searchParams.set('url', url);
+    endpoint.searchParams.set('mode', 'auto');
+
+    const response = await axios.get(endpoint.toString(), {
+      timeout: 60000,
+      maxRedirects: 5,
+      validateStatus: () => true,
+    });
+
+    const html = typeof response.data === 'string' ? response.data : String(response.data ?? '');
+    if (response.status >= 200 && response.status < 300) {
+      return { ok: true, html, finalUrl: url, mode: 'zenrows', status: response.status };
+    }
+
+    return { ok: false, error: new Error(`ZenRows returned status ${response.status}`), mode: 'zenrows', status: response.status };
+  } catch (error: any) {
+    const status = error?.response?.status;
+    return { ok: false, error, mode: 'zenrows', status };
+  }
+}
+
+async function fetchHtmlWithFallback(url: string): Promise<FetchResult> {
+  const direct = await fetchHtmlDirect(url);
+  if (direct.ok) {
+    if (!shouldEscalateToPlaywright({ status: direct.status, html: direct.html })) return direct;
+  } else {
+    if (!shouldEscalateToPlaywright({ status: direct.status })) return direct;
+  }
+
+  const rendered = await fetchHtmlPlaywright(url);
+  if (rendered.ok && rendered.html.trim().length >= 800 && !isProbablyBotBlock(rendered.html)) return rendered;
+
+  const zen = await fetchHtmlZenrows(url);
+  if (zen.ok) return zen;
+
+  return rendered.ok ? rendered : direct.ok ? direct : zen;
+}
+
+type RobotsRules = { disallow: string[] };
+
+function parseRobotsTxt(txt: string): RobotsRules {
+  const lines = txt.split(/\r?\n/);
+  let inStar = false;
+  const disallow: string[] = [];
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+
+    const idx = line.indexOf(':');
+    if (idx === -1) continue;
+    const key = line.slice(0, idx).trim().toLowerCase();
+    const value = line.slice(idx + 1).trim();
+
+    if (key === 'user-agent') {
+      inStar = value === '*' ? true : false;
+      continue;
+    }
+
+    if (inStar && key === 'disallow') {
+      if (value) disallow.push(value);
+    }
+  }
+
+  return { disallow };
+}
+
+function isAllowedByRobots(url: URL, rules: RobotsRules) {
+  const path = url.pathname || '/';
+  for (const rule of rules.disallow) {
+    if (rule === '/') return false;
+    if (rule && path.startsWith(rule)) return false;
+  }
+  return true;
+}
+
+async function getRobotsRules(baseUrl: URL): Promise<RobotsRules> {
+  const robotsUrl = new URL('/robots.txt', baseUrl.origin).toString();
+  try {
+    const res = await axios.get(robotsUrl, { timeout: 15000, validateStatus: () => true });
+    if (res.status >= 200 && res.status < 300 && typeof res.data === 'string') return parseRobotsTxt(res.data);
+    return { disallow: [] };
+  } catch {
+    return { disallow: [] };
+  }
+}
 
 export async function crawlWebsite(baseUrl: string, maxPages: number = 50): Promise<CrawledPage[]> {
+  const base = new URL(baseUrl);
+  const robots = await getRobotsRules(base);
   const visited = new Set<string>();
-  const queue: string[] = [baseUrl];
+  const queue: string[] = [normalizeUrl(baseUrl)];
   const results: CrawledPage[] = [];
-  const domain = new URL(baseUrl).hostname;
+  const domain = base.hostname;
 
   while (queue.length > 0 && results.length < maxPages) {
     const url = queue.shift()!;
@@ -25,41 +196,33 @@ export async function crawlWebsite(baseUrl: string, maxPages: number = 50): Prom
     visited.add(url);
 
     try {
-      const response = await axios.get(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-        },
-        timeout: 30000, // Increased to 30s
-        maxRedirects: 5,
-        httpsAgent: httpsAgent,
-        validateStatus: (status) => status >= 200 && status < 300,
-      });
+      const current = new URL(url);
+      if (current.hostname === domain && !isAllowedByRobots(current, robots)) continue;
 
-      const $ = cheerio.load(response.data);
+      const fetched = await fetchHtmlWithFallback(url);
+      if (!fetched.ok) continue;
+
+      const $ = cheerio.load(fetched.html);
       
-      // Remove script tags, style tags, and other non-content elements
       $('script, style, nav, footer, iframe, noscript').remove();
 
       const title = $('title').text().trim();
       const content = $('body').text().replace(/\s+/g, ' ').trim();
 
-      results.push({ url, title, content });
+      results.push({ url: fetched.finalUrl, title, content });
 
-      // Find internal links
       $('a[href]').each((_, element) => {
         const href = $(element).attr('href');
         if (!href) return;
 
         try {
-          const absoluteUrl = new URL(href, url);
-          absoluteUrl.hash = ''; // Remove hash
+          const absoluteUrl = new URL(href, fetched.finalUrl);
+          absoluteUrl.hash = '';
+          absoluteUrl.search = '';
           
           if (
             absoluteUrl.hostname === domain &&
+            isAllowedByRobots(absoluteUrl, robots) &&
             !visited.has(absoluteUrl.toString()) &&
             !queue.includes(absoluteUrl.toString()) &&
             (absoluteUrl.pathname.endsWith('/') || 
@@ -68,8 +231,7 @@ export async function crawlWebsite(baseUrl: string, maxPages: number = 50): Prom
           ) {
             queue.push(absoluteUrl.toString());
           }
-        } catch (e) {
-          // Invalid URL
+        } catch {
         }
       });
     } catch (error) {

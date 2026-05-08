@@ -46,8 +46,10 @@ export default function NewChatbotPage() {
           websiteUrl: url,
           name: extractedInfo.name || 'My Chatbot',
           config: {
-            ...config,
-            colors: { primary: config.primary_color, text: '#ffffff' }
+            tone: config.tone,
+            persona_name: config.persona_name,
+            welcome_message: config.welcome_message,
+            colors: { primary: config.primary_color, text: '#ffffff' },
           }
         }),
       });

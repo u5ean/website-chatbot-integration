@@ -34,9 +34,8 @@
       position: fixed;
       bottom: 90px;
       right: 20px;
-      width: 400px;
-      height: 600px;
-      max-height: calc(100vh - 120px);
+      width: min(480px, calc(100vw - 40px));
+      height: min(720px, calc(100vh - 140px));
       background: white;
       border-radius: 12px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.2);
@@ -80,6 +79,13 @@
     .message { max-width: 85%; padding: 10px 14px; border-radius: 18px; font-size: 14px; line-height: 1.4; }
     .message.user { align-self: flex-end; background: #000; color: white; border-bottom-right-radius: 4px; }
     .message.assistant { align-self: flex-start; background: #e9e9eb; color: #000; border-bottom-left-radius: 4px; }
+    .message.assistant a { color: inherit; text-decoration: underline; word-break: break-word; }
+    .message.assistant p { margin: 0; }
+    .message.assistant p + p { margin-top: 8px; }
+    .message.assistant ul, .message.assistant ol { margin: 8px 0 0 18px; padding: 0; }
+    .message.assistant li { margin: 4px 0; }
+    .message.assistant pre { margin: 10px 0 0; padding: 10px 12px; background: rgba(0,0,0,0.08); border-radius: 10px; overflow: auto; }
+    .message.assistant code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; }
     .input-area { padding: 16px; border-top: 1px solid #eee; display: flex; gap: 8px; }
     .input-area input { flex: 1; border: 1px solid #ddd; padding: 8px 12px; border-radius: 20px; outline: none; }
     .input-area button { background: #000; color: white; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; }
@@ -128,10 +134,126 @@
   const messageList = shadow.getElementById('message-list');
   const typingIndicator = shadow.getElementById('typing-indicator');
 
+  const escapeHtml = (s) =>
+    String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  const linkify = (s) => {
+    const isInsideHtmlTag = (full, offset) => {
+      const lastLt = full.lastIndexOf('<', offset);
+      const lastGt = full.lastIndexOf('>', offset);
+      return lastLt > lastGt;
+    };
+
+    const mdLink = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+    const withMd = s.replace(mdLink, (_m, text, url) => {
+      const safeText = escapeHtml(text);
+      const safeUrl = escapeHtml(url);
+      return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeText}</a>`;
+    });
+
+    const bareUrl = /https?:\/\/[^\s<]+[^<.,:;"')\]\s]/g;
+    return withMd.replace(bareUrl, (url, offset, full) => {
+      if (isInsideHtmlTag(full, offset)) return url;
+      const safeUrl = escapeHtml(url);
+      return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`;
+    });
+  };
+
+  const renderMarkdownLite = (markdown) => {
+    const text = String(markdown || '').replace(/\r\n/g, '\n');
+    const blocks = [];
+    let i = 0;
+
+    while (i < text.length) {
+      const fenceStart = text.indexOf('```', i);
+      if (fenceStart === -1) {
+        blocks.push({ type: 'text', value: text.slice(i) });
+        break;
+      }
+
+      if (fenceStart > i) blocks.push({ type: 'text', value: text.slice(i, fenceStart) });
+
+      const fenceEnd = text.indexOf('```', fenceStart + 3);
+      if (fenceEnd === -1) {
+        blocks.push({ type: 'text', value: text.slice(fenceStart) });
+        break;
+      }
+
+      const codeRaw = text.slice(fenceStart + 3, fenceEnd);
+      const code = codeRaw.replace(/^\w+\n/, '');
+      blocks.push({ type: 'code', value: code });
+      i = fenceEnd + 3;
+    }
+
+    const htmlParts = [];
+    for (const b of blocks) {
+      if (b.type === 'code') {
+        htmlParts.push(`<pre><code>${escapeHtml(b.value)}</code></pre>`);
+        continue;
+      }
+
+      const lines = b.value.split('\n');
+      let ul = null;
+      let ol = null;
+
+      const flushLists = () => {
+        if (ul) {
+          htmlParts.push(`<ul>${ul.join('')}</ul>`);
+          ul = null;
+        }
+        if (ol) {
+          htmlParts.push(`<ol>${ol.join('')}</ol>`);
+          ol = null;
+        }
+      };
+
+      for (const rawLine of lines) {
+        const line = rawLine.trimEnd();
+        if (!line.trim()) {
+          flushLists();
+          continue;
+        }
+
+        const bullet = line.match(/^\s*-\s+(.*)$/);
+        if (bullet) {
+          ol = null;
+          ul = ul || [];
+          ul.push(`<li>${linkify(escapeHtml(bullet[1]))}</li>`);
+          continue;
+        }
+
+        const numbered = line.match(/^\s*\d+\.\s+(.*)$/);
+        if (numbered) {
+          ul = null;
+          ol = ol || [];
+          ol.push(`<li>${linkify(escapeHtml(numbered[1]))}</li>`);
+          continue;
+        }
+
+        flushLists();
+        const inlineCode = escapeHtml(line).replace(/`([^`]+)`/g, (_m, c) => `<code>${escapeHtml(c)}</code>`);
+        htmlParts.push(`<p>${linkify(inlineCode)}</p>`);
+      }
+
+      flushLists();
+    }
+
+    return htmlParts.join('');
+  };
+
   const addMessage = (content, role) => {
     const msg = document.createElement('div');
     msg.className = `message ${role}`;
-    msg.textContent = content;
+    if (role === 'assistant') {
+      msg.innerHTML = renderMarkdownLite(content);
+    } else {
+      msg.textContent = content;
+    }
     messageList.appendChild(msg);
     messageList.scrollTop = messageList.scrollHeight;
     return msg;
@@ -158,43 +280,54 @@
 
       typingIndicator.style.display = 'none';
       
-      if (!response.ok) throw new Error('Failed to send message');
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        throw new Error(errText || 'Failed to send message');
+      }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let assistantMsg = addMessage('', 'assistant');
       let fullContent = '';
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
+        buffer += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buffer.indexOf('\n\n')) !== -1) {
+          const rawEvent = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+
+          const lines = rawEvent.split('\n');
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
             const data = line.slice(6);
             if (data === '[DONE]') continue;
+            if (!data) continue;
+
+            let parsed = null;
             try {
-              const parsed = JSON.parse(data);
-              if (parsed.text) {
-                fullContent += parsed.text;
-                assistantMsg.textContent = fullContent;
-                messageList.scrollTop = messageList.scrollHeight;
-              }
-              if (parsed.sessionId) sessionId = parsed.sessionId;
-            } catch (e) {
-              // Not JSON
-              fullContent += data;
-              assistantMsg.textContent = fullContent;
+              parsed = JSON.parse(data);
+            } catch {
+              continue;
+            }
+
+            if (parsed && parsed.sessionId) sessionId = parsed.sessionId;
+            if (parsed && parsed.text) {
+              fullContent += parsed.text;
+              assistantMsg.innerHTML = renderMarkdownLite(fullContent);
+              messageList.scrollTop = messageList.scrollHeight;
             }
           }
         }
       }
     } catch (error) {
       typingIndicator.style.display = 'none';
-      addMessage('Sorry, I encountered an error. Please try again.', 'assistant');
+      console.error('AI Chatbot: sendMessage failed', error);
+      addMessage(`Sorry, I encountered an error. ${error?.message ? `(${error.message})` : ''}`.trim(), 'assistant');
     }
   };
 

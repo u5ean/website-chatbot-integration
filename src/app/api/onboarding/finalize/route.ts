@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { crawlWebsite } from '@/lib/crawler';
 import { processAndStoreKnowledge } from '@/lib/knowledge';
 
+export const runtime = 'nodejs';
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
@@ -14,6 +16,12 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     const { websiteUrl, name, config } = body;
+    const { primary_color, ...safeConfig } = (config ?? {}) as Record<string, unknown>;
+    const colors =
+      (safeConfig as any).colors ??
+      (typeof primary_color === 'string'
+        ? { primary: primary_color, text: '#ffffff' }
+        : undefined);
 
     // 1. Create chatbot config
     const { data: chatbot, error: configError } = await supabase
@@ -22,7 +30,8 @@ export async function POST(req: Request) {
         user_id: user.id,
         website_url: websiteUrl,
         name: name,
-        ...config
+        ...safeConfig,
+        ...(colors ? { colors } : {}),
       })
       .select()
       .single();
