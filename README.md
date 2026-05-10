@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+AI Website Chatbot SaaS (Next.js App Router + Supabase + OpenAI + Stripe)
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+- Node.js 20+ recommended
+- A Supabase project (Postgres + pgvector)
+- OpenAI API key
+- Stripe account (test mode) + Stripe CLI (for local webhooks)
 
+### 1) Install dependencies
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2) Configure environment variables
+- Copy `.env.example` to `.env`
+- Fill in values
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Required:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `OPENAI_API_KEY`
+- `NEXT_PUBLIC_APP_URL` (use `http://localhost:3000` locally)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Optional (recommended for hard-to-crawl sites):
+- `ZENROWS_API_KEY`
 
-## Learn More
+Stripe (test mode):
+- `STRIPE_SECRET_KEY` (starts with `sk_test_...`)
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (starts with `pk_test_...`)
+- `STRIPE_WEBHOOK_SECRET` (starts with `whsec_...`)
 
-To learn more about Next.js, take a look at the following resources:
+### 3) Apply database migrations (Supabase)
+Run the SQL files in `supabase/migrations/` in your Supabase project:
+- `supabase/migrations/20260507000000_initial_schema.sql`
+- `supabase/migrations/20260508000000_add_session_tags.sql`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+You can paste each file into Supabase Dashboard → SQL Editor and run them.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 4) Playwright setup (used as a crawling fallback)
+If Playwright complains about missing browsers:
+```bash
+npx playwright install
+```
 
-## Deploy on Vercel
+### 5) Start the dev server
+```bash
+npm run dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Open http://localhost:3000
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Local Testing Checklist
+
+### Auth + Dashboard
+- Visit `/login` to create/sign in
+- Create a chatbot at `/dashboard/new`
+
+### Widget preview + embed
+- Open your chatbot config: `/dashboard/chatbots/<id>`
+- Use the Live Preview iframe or open `/preview/<id>`
+- Embed code is at `/dashboard/chatbots/<id>/embed`
+
+### Stripe webhooks (test mode, local)
+Run Stripe CLI forwarding:
+```bash
+stripe listen --forward-to localhost:3000/api/webhooks/stripe
+```
+Copy the printed `whsec_...` value into `STRIPE_WEBHOOK_SECRET`.
+
+## Notes
+- `.env` is intentionally ignored by git. Never commit real keys.
+- `.env.example` is tracked so the next machine can set up quickly.
