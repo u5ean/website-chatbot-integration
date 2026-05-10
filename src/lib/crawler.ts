@@ -8,11 +8,20 @@ export interface CrawledPage {
   content: string;
 }
 
-type FetchMode = 'direct' | 'playwright' | 'zenrows'
+export interface ContentChunk {
+  content: string;
+  metadata: {
+    sourceUrl: string;
+    pageTitle: string;
+    chunkIndex: number;
+  };
+}
+
+type FetchMode = 'direct' | 'playwright' | 'zenrows';
 
 type FetchResult =
   | { ok: true; html: string; finalUrl: string; mode: FetchMode; status: number }
-  | { ok: false; error: unknown; mode: FetchMode; status?: number }
+  | { ok: false; error: unknown; mode: FetchMode; status?: number };
 
 function normalizeUrl(input: string) {
   const u = new URL(input);
@@ -56,7 +65,13 @@ async function fetchHtmlDirect(url: string): Promise<FetchResult> {
     });
 
     const html = typeof response.data === 'string' ? response.data : String(response.data ?? '');
-    return { ok: true, html, finalUrl: response.request?.res?.responseUrl ?? url, mode: 'direct', status: response.status };
+    return {
+      ok: true,
+      html,
+      finalUrl: response.request?.res?.responseUrl ?? url,
+      mode: 'direct',
+      status: response.status,
+    };
   } catch (error: any) {
     const status = error?.response?.status;
     return { ok: false, error, mode: 'direct', status };
@@ -109,7 +124,12 @@ async function fetchHtmlZenrows(url: string): Promise<FetchResult> {
       return { ok: true, html, finalUrl: url, mode: 'zenrows', status: response.status };
     }
 
-    return { ok: false, error: new Error(`ZenRows returned status ${response.status}`), mode: 'zenrows', status: response.status };
+    return {
+      ok: false,
+      error: new Error(`ZenRows returned status ${response.status}`),
+      mode: 'zenrows',
+      status: response.status,
+    };
   } catch (error: any) {
     const status = error?.response?.status;
     return { ok: false, error, mode: 'zenrows', status };
@@ -125,7 +145,8 @@ async function fetchHtmlWithFallback(url: string): Promise<FetchResult> {
   }
 
   const rendered = await fetchHtmlPlaywright(url);
-  if (rendered.ok && rendered.html.trim().length >= 800 && !isProbablyBotBlock(rendered.html)) return rendered;
+  if (rendered.ok && rendered.html.trim().length >= 800 && !isProbablyBotBlock(rendered.html))
+    return rendered;
 
   const zen = await fetchHtmlZenrows(url);
   if (zen.ok) return zen;
@@ -150,7 +171,7 @@ function parseRobotsTxt(txt: string): RobotsRules {
     const value = line.slice(idx + 1).trim();
 
     if (key === 'user-agent') {
-      inStar = value === '*' ? true : false;
+      inStar = value === '*';
       continue;
     }
 
@@ -175,14 +196,121 @@ async function getRobotsRules(baseUrl: URL): Promise<RobotsRules> {
   const robotsUrl = new URL('/robots.txt', baseUrl.origin).toString();
   try {
     const res = await axios.get(robotsUrl, { timeout: 15000, validateStatus: () => true });
-    if (res.status >= 200 && res.status < 300 && typeof res.data === 'string') return parseRobotsTxt(res.data);
+    if (res.status >= 200 && res.status < 300 && typeof res.data === 'string')
+      return parseRobotsTxt(res.data);
     return { disallow: [] };
   } catch {
     return { disallow: [] };
   }
 }
 
-export async function crawlWebsite(baseUrl: string, maxPages: number = 50): Promise<CrawledPage[]> {
+// ── IMPROVED: noise removal + smart content targeting ──────────────────────
+function extractCleanContent($: cheerio.CheerioAPI): string {
+  // Remove all noise elements
+  $(
+    [
+      'script', 'style', 'nav', 'footer', 'header', 'iframe', 'noscript',
+      '[class*="cookie"]', '[id*="cookie"]',
+      '[class*="banner"]', '[id*="banner"]',
+      '[class*="sidebar"]', '[id*="sidebar"]',
+      '[class*="popup"]',  '[id*="popup"]',
+      '[class*="modal"]',  '[id*="modal"]',
+      '[class*="advertisement"]', '[class*=" ad-"]', '[id*=" ad-"]',
+      '[class*="widget"]',
+      '[class*="newsletter"]', '[id*="newsletter"]',
+      '[class*="subscribe"]',
+      '[role="complementary"]',
+      '[aria-label="Advertisement"]',
+    ].join(', ')
+  ).remove();
+
+  // Target meaningful content in priority order
+  const selectors = [
+    'main',
+    'article',
+    '[role="main"]',
+    '.content',
+    '#content',
+    '.main-content',
+    '#main-content',
+    '.page-content',
+    '#page-content',
+    'body',
+  ];
+
+  for (const selector of selectors) {
+    const el = $(selector).first();
+    if (el.length) {
+      const text = el.text().replace(/\s+/g, ' ').trim();
+      if (text.length >= 200) return text;
+    }
+  }
+
+  return '';
+}
+
+// ── IMPROVED: paragraph-aware chunking with overlap ────────────────────────
+export function chunkText(
+  text: string,
+  pageTitle: string,
+  sourceUrl: string,
+  chunkSize: number = 500,
+  overlapWords: number = 50
+): ContentChunk[] {
+  // Split into paragraphs first
+  const paragraphs = text
+    .split(/\n\n+/)
+    .map(p => p.trim())
+    .filter(p => p.length > 0);
+
+  // Further split long paragraphs by sentence
+  const segments: string[] = [];
+  for (const para of paragraphs) {
+    if (para.split(' ').length <= chunkSize) {
+      segments.push(para);
+    } else {
+      const sentences = para.match(/[^.!?]+[.!?]+/g) ?? [para];
+      segments.push(...sentences.map(s => s.trim()).filter(Boolean));
+    }
+  }
+
+  // Combine segments into chunks of ~chunkSize words, with overlap
+  const chunks: ContentChunk[] = [];
+  let currentWords: string[] = [];
+  let chunkIndex = 0;
+
+  const flushChunk = (overlapFromPrev: string[] = []) => {
+    if (currentWords.length === 0) return;
+    const content = [...overlapFromPrev, ...currentWords].join(' ').trim();
+    if (content.length >= 100) {
+      chunks.push({
+        content,
+        metadata: { sourceUrl, pageTitle, chunkIndex },
+      });
+      chunkIndex++;
+    }
+  };
+
+  for (const segment of segments) {
+    const words = segment.split(' ');
+    if (currentWords.length + words.length > chunkSize && currentWords.length > 0) {
+      const overlap = currentWords.slice(-overlapWords);
+      flushChunk();
+      currentWords = [...overlap, ...words];
+    } else {
+      currentWords.push(...words);
+    }
+  }
+
+  flushChunk();
+  return chunks;
+}
+
+// ── MAIN CRAWL ─────────────────────────────────────────────────────────────
+export async function crawlWebsite(
+  baseUrl: string,
+  maxPages: number = 50
+): Promise<CrawledPage[]> {
   const base = new URL(baseUrl);
   const robots = await getRobotsRules(base);
   const visited = new Set<string>();
@@ -203,11 +331,11 @@ export async function crawlWebsite(baseUrl: string, maxPages: number = 50): Prom
       if (!fetched.ok) continue;
 
       const $ = cheerio.load(fetched.html);
-      
-      $('script, style, nav, footer, iframe, noscript').remove();
-
       const title = $('title').text().trim();
-      const content = $('body').text().replace(/\s+/g, ' ').trim();
+      const content = extractCleanContent($);
+
+      // Skip pages with too little meaningful content
+      if (content.length < 200) continue;
 
       results.push({ url: fetched.finalUrl, title, content });
 
@@ -219,19 +347,20 @@ export async function crawlWebsite(baseUrl: string, maxPages: number = 50): Prom
           const absoluteUrl = new URL(href, fetched.finalUrl);
           absoluteUrl.hash = '';
           absoluteUrl.search = '';
-          
+
           if (
             absoluteUrl.hostname === domain &&
             isAllowedByRobots(absoluteUrl, robots) &&
             !visited.has(absoluteUrl.toString()) &&
             !queue.includes(absoluteUrl.toString()) &&
-            (absoluteUrl.pathname.endsWith('/') || 
-             absoluteUrl.pathname.match(/\.(html|php|asp|aspx)$/) || 
-             !absoluteUrl.pathname.includes('.'))
+            (absoluteUrl.pathname.endsWith('/') ||
+              absoluteUrl.pathname.match(/\.(html|php|asp|aspx)$/) ||
+              !absoluteUrl.pathname.includes('.'))
           ) {
             queue.push(absoluteUrl.toString());
           }
         } catch {
+          // ignore invalid URLs
         }
       });
     } catch (error) {
@@ -242,25 +371,18 @@ export async function crawlWebsite(baseUrl: string, maxPages: number = 50): Prom
   return results;
 }
 
-export function chunkText(text: string, chunkSize: number = 500): string[] {
-  const chunks: string[] = [];
-  const words = text.split(' ');
-  let currentChunk: string[] = [];
-  let currentLength = 0;
+// ── HELPER: crawl + chunk in one call ─────────────────────────────────────
+export async function crawlAndChunk(
+  baseUrl: string,
+  maxPages: number = 50
+): Promise<ContentChunk[]> {
+  const pages = await crawlWebsite(baseUrl, maxPages);
+  const allChunks: ContentChunk[] = [];
 
-  for (const word of words) {
-    if (currentLength + word.length > chunkSize && currentChunk.length > 0) {
-      chunks.push(currentChunk.join(' '));
-      currentChunk = [];
-      currentLength = 0;
-    }
-    currentChunk.push(word);
-    currentLength += word.length + 1;
+  for (const page of pages) {
+    const chunks = chunkText(page.content, page.title, page.url);
+    allChunks.push(...chunks);
   }
 
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk.join(' '));
-  }
-
-  return chunks;
+  return allChunks;
 }

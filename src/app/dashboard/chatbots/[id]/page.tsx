@@ -45,6 +45,12 @@ export default async function ChatbotConfigPage({
           >
             Embed
           </Link>
+          <Link
+            href={`/dashboard/chatbots/${chatbot.id}/delete`}
+            className="text-sm font-medium text-red-700 hover:underline"
+          >
+            Delete
+          </Link>
         </div>
       </div>
 
