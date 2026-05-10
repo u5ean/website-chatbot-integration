@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import ConfigForm from './ConfigForm';
+import DeleteButton from './DeleteButton';
 
 export default async function ChatbotConfigPage({
   params,
@@ -45,7 +46,10 @@ export default async function ChatbotConfigPage({
           >
             Embed
           </Link>
+          <DeleteButton chatbotId={chatbot.id}>
+          </DeleteButton>
         </div>
+        
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_520px] gap-6">
@@ -57,7 +61,7 @@ export default async function ChatbotConfigPage({
           <iframe
             title="Chatbot preview"
             src={`/preview/${chatbot.id}`}
-            className="w-full h-[560px] bg-white"
+            className="w-full h-  [560px] bg-white"
           />
         </div>
       </div>

@@ -38,20 +38,23 @@ export async function POST(req: Request) {
 
     if (configError) throw configError;
 
-    // 2. Start background processing (crawling and embedding)
-    // In a real production app, you'd use a background worker (e.g., Inngest, Upstash QStash)
-    // For this implementation, we'll run it and return the ID.
-    // Note: This might timeout on Vercel hobby plan if it takes > 10s.
-    
-    // We crawl again to get the full content for all pages
-    const pages = await crawlWebsite(websiteUrl);
-    
-    // Process and store knowledge (embeddings)
-    await processAndStoreKnowledge(chatbot.id, pages);
+    const chatbotId = chatbot.id;
+
+    setTimeout(() => {
+      void (async () => {
+        try {
+          const pages = await crawlWebsite(websiteUrl);
+          await processAndStoreKnowledge(chatbotId, pages);
+        } catch (e) {
+          console.error('Finalize onboarding background error:', e);
+        }
+      })();
+    }, 0);
 
     return NextResponse.json({
       success: true,
-      chatbotId: chatbot.id
+      chatbotId,
+      indexing: true,
     });
   } catch (error: any) {
     console.error('Finalize onboarding error:', error);

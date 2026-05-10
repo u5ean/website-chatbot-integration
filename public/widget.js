@@ -89,7 +89,18 @@
     .input-area { padding: 16px; border-top: 1px solid #eee; display: flex; gap: 8px; }
     .input-area input { flex: 1; border: 1px solid #ddd; padding: 8px 12px; border-radius: 20px; outline: none; }
     .input-area button { background: #000; color: white; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; }
+    .input-area button:disabled { opacity: 0.6; cursor: not-allowed; }
     .typing { font-size: 12px; color: #666; margin-bottom: 8px; display: none; }
+    .panel { border-top: 1px solid #eee; padding: 16px; background: white; }
+    .panel .label { font-size: 12px; color: #555; margin-bottom: 6px; }
+    .panel .field { width: 100%; border: 1px solid #ddd; padding: 8px 12px; border-radius: 10px; outline: none; }
+    .panel .row { display: flex; flex-direction: column; gap: 10px; }
+    .panel .actions { display: flex; gap: 8px; margin-top: 12px; }
+    .panel .primary { background: #000; color: white; border: none; padding: 8px 12px; border-radius: 10px; cursor: pointer; }
+    .panel .primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .panel .secondary { background: transparent; color: #111; border: 1px solid #ddd; padding: 8px 12px; border-radius: 10px; cursor: pointer; }
+    .handoff { padding: 12px 16px 0; background: #f9f9f9; }
+    .handoff a { font-size: 12px; color: #111; text-decoration: underline; }
   `;
   shadow.appendChild(shadowStyle);
 
@@ -107,6 +118,8 @@
       <div class="message assistant">Hi! How can I help you today?</div>
     </div>
     <div id="typing-indicator" class="typing" style="padding: 0 16px;">Assistant is typing...</div>
+    <div id="handoff-panel" class="handoff" style="display:none;"></div>
+    <div id="lead-panel" class="panel" style="display:none;"></div>
     <div class="input-area">
       <input type="text" id="user-input" placeholder="Type a message..." autocomplete="off">
       <button id="send-btn">Send</button>
@@ -117,6 +130,11 @@
   // State
   let isOpen = false;
   let sessionId = null;
+  let leadCaptureEnabled = false;
+  let handoffUrl = '';
+  let leadName = '';
+  let leadEmail = '';
+  let leadCaptured = false;
 
   // Event Listeners
   bubble.onclick = () => {
@@ -133,6 +151,117 @@
   const sendBtn = shadow.getElementById('send-btn');
   const messageList = shadow.getElementById('message-list');
   const typingIndicator = shadow.getElementById('typing-indicator');
+  const leadPanel = shadow.getElementById('lead-panel');
+  const handoffPanel = shadow.getElementById('handoff-panel');
+  const inputArea = shadow.querySelector('.input-area');
+
+  const leadStorageKey = `ai-chatbot-lead:${chatbotId}`;
+
+  const loadLead = () => {
+    try {
+      const raw = window.localStorage.getItem(leadStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const n = typeof parsed?.name === 'string' ? parsed.name.trim() : '';
+      const e = typeof parsed?.email === 'string' ? parsed.email.trim() : '';
+      if (n) leadName = n;
+      if (e) leadEmail = e;
+      if (n || e) leadCaptured = true;
+    } catch {}
+  };
+
+  const saveLead = () => {
+    try {
+      window.localStorage.setItem(leadStorageKey, JSON.stringify({ name: leadName, email: leadEmail }));
+    } catch {}
+  };
+
+  const setChatEnabled = (enabled) => {
+    input.disabled = !enabled;
+    sendBtn.disabled = !enabled;
+  };
+
+  const renderHandoff = () => {
+    if (typeof handoffUrl === 'string' && handoffUrl.trim()) {
+      const safe = escapeHtml(handoffUrl.trim());
+      handoffPanel.innerHTML = `<a href="${safe}" target="_blank" rel="noopener noreferrer">Talk to a human</a>`;
+      handoffPanel.style.display = 'block';
+    } else {
+      handoffPanel.style.display = 'none';
+      handoffPanel.innerHTML = '';
+    }
+  };
+
+  const renderLeadPanel = () => {
+    if (!leadCaptureEnabled || leadCaptured) {
+      leadPanel.style.display = 'none';
+      leadPanel.innerHTML = '';
+      inputArea.style.display = 'flex';
+      setChatEnabled(true);
+      return;
+    }
+
+    setChatEnabled(false);
+    inputArea.style.display = 'none';
+    leadPanel.style.display = 'block';
+    leadPanel.innerHTML = `
+      <div style="font-weight:600; font-size:14px; margin-bottom:10px;">Before we start</div>
+      <div class="row">
+        <div>
+          <div class="label">Name</div>
+          <input class="field" id="lead-name" type="text" autocomplete="name" placeholder="Your name">
+        </div>
+        <div>
+          <div class="label">Email</div>
+          <input class="field" id="lead-email" type="email" autocomplete="email" placeholder="you@company.com">
+        </div>
+      </div>
+      <div class="actions">
+        <button class="primary" id="lead-continue">Continue</button>
+        <button class="secondary" id="lead-cancel">Cancel</button>
+      </div>
+      <div id="lead-error" style="display:none; margin-top:10px; font-size:12px; color:#b91c1c;"></div>
+    `;
+
+    const nameEl = shadow.getElementById('lead-name');
+    const emailEl = shadow.getElementById('lead-email');
+    const continueEl = shadow.getElementById('lead-continue');
+    const cancelEl = shadow.getElementById('lead-cancel');
+    const errorEl = shadow.getElementById('lead-error');
+
+    nameEl.value = leadName || '';
+    emailEl.value = leadEmail || '';
+
+    const showError = (msg) => {
+      errorEl.textContent = msg;
+      errorEl.style.display = msg ? 'block' : 'none';
+    };
+
+    cancelEl.onclick = () => {
+      showError('');
+      isOpen = false;
+      container.style.display = 'none';
+    };
+
+    const submit = () => {
+      const n = String(nameEl.value || '').trim();
+      const e = String(emailEl.value || '').trim();
+      if (!n) return showError('Name is required.');
+      if (!e) return showError('Email is required.');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return showError('Please enter a valid email.');
+
+      leadName = n.slice(0, 120);
+      leadEmail = e.slice(0, 200);
+      leadCaptured = true;
+      saveLead();
+      showError('');
+      renderLeadPanel();
+    };
+
+    continueEl.onclick = submit;
+    emailEl.onkeypress = (ev) => { if (ev.key === 'Enter') submit(); };
+    nameEl.onkeypress = (ev) => { if (ev.key === 'Enter') submit(); };
+  };
 
   const escapeHtml = (s) =>
     String(s)
@@ -260,6 +389,11 @@
   };
 
   const sendMessage = async () => {
+    if (leadCaptureEnabled && !leadCaptured) {
+      renderLeadPanel();
+      return;
+    }
+
     const text = input.value.trim();
     if (!text) return;
 
@@ -274,7 +408,8 @@
         body: JSON.stringify({
           chatbotId,
           message: text,
-          sessionId
+          sessionId,
+          ...(leadCaptured ? { leadName, leadEmail } : {})
         })
       });
 
@@ -348,6 +483,11 @@
       if (config.welcome_message) {
         messageList.innerHTML = `<div class="message assistant">${config.welcome_message}</div>`;
       }
+      leadCaptureEnabled = Boolean(config.lead_capture_enabled);
+      handoffUrl = typeof config.handoff_url === 'string' ? config.handoff_url : '';
+      loadLead();
+      renderHandoff();
+      renderLeadPanel();
     })
     .catch(err => console.error('AI Chatbot: Failed to load config', err));
 })();

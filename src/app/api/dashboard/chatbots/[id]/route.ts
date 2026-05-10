@@ -59,3 +59,30 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 }
 
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { data, error } = await supabase
+      .from('chatbot_configs')
+      .delete()
+      .eq('id', id)
+      .select('id');
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (!data || data.length === 0) {
+      return NextResponse.json({ error: 'Chatbot not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true, deletedId: data[0]?.id });
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || 'Internal server error' }, { status: 500 });
+  }
+}
+

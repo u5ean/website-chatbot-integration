@@ -18,7 +18,7 @@ export async function OPTIONS(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const { chatbotId, message, sessionId } = await req.json();
+    const { chatbotId, message, sessionId, leadName, leadEmail } = await req.json();
 
     if (!chatbotId || !message) {
       return NextResponse.json(
@@ -62,12 +62,28 @@ export async function POST(req: Request) {
     if (!currentSessionId) {
       const { data: session, error: sessionError } = await supabase
         .from('chat_sessions')
-        .insert({ chatbot_id: chatbotId })
+        .insert({
+          chatbot_id: chatbotId,
+          ...(typeof leadName === 'string' && leadName.trim() ? { lead_name: leadName.trim().slice(0, 120) } : {}),
+          ...(typeof leadEmail === 'string' && leadEmail.trim() ? { lead_email: leadEmail.trim().slice(0, 200) } : {}),
+        })
         .select()
         .single();
       
       if (sessionError) throw sessionError;
       currentSessionId = session.id;
+    } else {
+      const nextLeadName = typeof leadName === 'string' ? leadName.trim() : '';
+      const nextLeadEmail = typeof leadEmail === 'string' ? leadEmail.trim() : '';
+      if (nextLeadName || nextLeadEmail) {
+        await supabase
+          .from('chat_sessions')
+          .update({
+            ...(nextLeadName ? { lead_name: nextLeadName.slice(0, 120) } : {}),
+            ...(nextLeadEmail ? { lead_email: nextLeadEmail.slice(0, 200) } : {}),
+          })
+          .eq('id', currentSessionId);
+      }
     }
 
     // 4. Save User Message
@@ -92,21 +108,23 @@ export async function POST(req: Request) {
       messages: [
         {
           role: 'system',
-          content: `You are a helpful AI assistant for a website. 
-          Use the following context to answer the user's questions. 
-          If you don't know the answer based on the context, say you don't know but try to be helpful.
-          Format responses in concise Markdown (short paragraphs, bullet lists, and code blocks when helpful).
-          If you used the provided context, end your answer with a "Sources:" section formatted exactly like:
-          Sources:
-          - [Short title](https://example.com/page)
-          Use one bullet per source. Do not split URLs across lines.
-          Only include source URLs that appear in the provided context. Do not invent links.
+          content: `You are ${config.persona_name || 'an AI assistant'} for ${config.business_name || 'this website'}.
           
-          Tone: ${config.tone || 'professional'}
-          Persona Name: ${config.persona_name || 'Assistant'}
-          
-          Context:
-          ${context}`,
+    RULES:
+    - ONLY answer using the context provided below. Do not use outside knowledge.
+    - If the answer is not in the context, say: "I don't have that information, but you can contact us for help."
+    - Never make up facts, prices, dates, or links.
+    - Keep answers concise and helpful.
+    - Speak in a ${config.tone || 'professional'} tone.
+    - If asked something off-topic or unrelated to the business, politely redirect.
+
+    CONTEXT FROM WEBSITE:
+    ${context}
+
+    If you referenced specific pages, end with:
+    Sources:
+    - [Page Title](url)
+    Only list URLs that appear in the context above. Never invent links.`,
         },
         ...(history?.map(m => ({ role: m.role as any, content: m.content })) || []),
       ],

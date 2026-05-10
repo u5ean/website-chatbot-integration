@@ -97,7 +97,15 @@ export default function NewChatbotPage() {
             className="w-full bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 disabled:bg-gray-400 flex items-center justify-center gap-2"
           >
             {loading && <Loader2 className="animate-spin" size={20} />}
-            {loading ? 'Crawling Website...' : 'Analyze Website'}
+            {loading ? (
+              <span className="text-center leading-tight">
+                Crawling Website...
+                <br />
+                <span className="text-xs font-normal opacity-80">Takes up to 2 minutes</span>
+              </span>
+            ) : (
+              'Analyze Website'
+            )}
           </button>
         </div>
       )}
@@ -181,7 +189,15 @@ export default function NewChatbotPage() {
             className="w-full bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 disabled:bg-gray-400 flex items-center justify-center gap-2"
           >
             {loading && <Loader2 className="animate-spin" size={20} />}
-            {loading ? 'Creating Chatbot...' : 'Launch Chatbot'}
+            {loading ? (
+              <span className="text-center leading-tight">
+                Creating Chatbot...
+                <br />
+                <span className="text-xs font-normal opacity-80">Takes up to 2-5 minutes</span>
+              </span>
+            ) : (
+              'Launch Chatbot'
+            )}
           </button>
         </div>
       )}

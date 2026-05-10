@@ -47,7 +47,8 @@ export async function GET(req: Request) {
       bubble_position: data.bubble_position,
       avatar_url: data.avatar_url,
       starter_questions: data.starter_questions,
-      lead_capture_enabled: data.lead_capture_enabled
+      lead_capture_enabled: data.lead_capture_enabled,
+      handoff_url: data.handoff_url,
     }, { headers: corsHeaders(req) });
   } catch (error) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers: corsHeaders(req) });
