@@ -2,6 +2,11 @@
   const script = document.currentScript;
   const chatbotId = script.getAttribute('data-chatbot-id');
   const apiUrl = script.getAttribute('data-api-url') || 'https://your-domain.com';
+  const autoOpen =
+    script.getAttribute('data-open') === 'true' ||
+    script.getAttribute('data-auto-open') === 'true';
+  const hideBubble = script.getAttribute('data-hide-bubble') === 'true';
+  const hideClose = script.getAttribute('data-hide-close') === 'true';
 
   if (!chatbotId) {
     console.error('AI Chatbot: Missing data-chatbot-id attribute');
@@ -61,6 +66,7 @@
   bubble.id = 'ai-chatbot-bubble';
   bubble.innerHTML = `<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>`;
   document.body.appendChild(bubble);
+  if (hideBubble) bubble.style.display = 'none';
 
   // Create Container
   const container = document.createElement('div');
@@ -146,6 +152,10 @@
     isOpen = false;
     container.style.display = 'none';
   };
+
+  if (hideClose) {
+    shadow.getElementById('close-chat').style.display = 'none';
+  }
 
   const input = shadow.getElementById('user-input');
   const sendBtn = shadow.getElementById('send-btn');
@@ -488,6 +498,11 @@
       loadLead();
       renderHandoff();
       renderLeadPanel();
+
+      if (autoOpen) {
+        isOpen = true;
+        container.style.display = 'flex';
+      }
     })
     .catch(err => console.error('AI Chatbot: Failed to load config', err));
 })();

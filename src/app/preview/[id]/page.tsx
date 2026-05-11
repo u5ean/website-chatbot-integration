@@ -20,20 +20,30 @@ export default async function PreviewPage({
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
   return (
-    <div className="bg-white">
-      <div style={{ padding: 12, maxWidth: 720 }}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>Widget Preview</div>
-        <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
-          This page loads only the widget.
-        </div>
-        {!chatbot.is_active && (
-          <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 8 }}>
-            This chatbot is currently paused.
+    <div className="min-h-screen bg-gray-50">
+      <div className="mx-auto max-w-3xl px-6 py-8 space-y-4">
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <div className="text-sm font-semibold">Widget Preview</div>
+          <div className="mt-1 text-xs text-gray-500">
+            Preview mode opens the chat automatically.
           </div>
-        )}
+          {!chatbot.is_active && (
+            <div className="mt-2 text-xs text-red-700">
+              This chatbot is currently paused.
+            </div>
+          )}
+        </div>
       </div>
 
-      <script src={`${appUrl}/widget.js`} data-chatbot-id={id} data-api-url={appUrl} async />
+      <script
+        src={`${appUrl}/widget.js`}
+        data-chatbot-id={id}
+        data-api-url={appUrl}
+        data-open="true"
+        data-hide-bubble="true"
+        data-hide-close="true"
+        async
+      />
     </div>
   );
 }

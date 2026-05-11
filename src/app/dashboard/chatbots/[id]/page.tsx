@@ -46,8 +46,7 @@ export default async function ChatbotConfigPage({
           >
             Embed
           </Link>
-          <DeleteButton chatbotId={chatbot.id}>
-          </DeleteButton>
+          <DeleteButton chatbotId={chatbot.id} />
         </div>
         
       </div>
@@ -61,7 +60,7 @@ export default async function ChatbotConfigPage({
           <iframe
             title="Chatbot preview"
             src={`/preview/${chatbot.id}`}
-            className="w-full h-  [560px] bg-white"
+            className="w-full h-[560px] bg-white"
           />
         </div>
       </div>

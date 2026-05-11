@@ -34,9 +34,21 @@ function isProbablyBotBlock(html: string) {
   );
 }
 
+function estimateBodyTextLength(html: string) {
+  try {
+    const $ = cheerio.load(html);
+    $('script, style, noscript').remove();
+    const text = $('body').text().replace(/\s+/g, ' ').trim();
+    return text.length;
+  } catch {
+    return 0;
+  }
+}
+
 function shouldEscalateToPlaywright(res: { status?: number; html?: string }) {
   if (res.status && [401, 403, 406, 409, 423, 429, 451, 503].includes(res.status)) return true;
   if (res.html && (res.html.trim().length < 800 || isProbablyBotBlock(res.html))) return true;
+  if (res.html && estimateBodyTextLength(res.html) < 220) return true;
   return false;
 }
 
@@ -70,7 +82,11 @@ async function fetchHtmlPlaywright(url: string): Promise<FetchResult> {
     try {
       const page = await browser.newPage();
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
-      await page.waitForTimeout(1000);
+      try {
+        await page.waitForLoadState('networkidle', { timeout: 15000 });
+      } catch {
+      }
+      await page.waitForTimeout(1500);
       const html = await page.content();
       const finalUrl = page.url();
       return { ok: true, html, finalUrl, mode: 'playwright', status: 200 };
@@ -203,11 +219,25 @@ export async function crawlWebsite(baseUrl: string, maxPages: number = 50): Prom
       if (!fetched.ok) continue;
 
       const $ = cheerio.load(fetched.html);
-      
+      const structured: string[] = [];
+      $('script[type="application/ld+json"]').each((_, el) => {
+        const raw = $(el).text();
+        if (raw && raw.trim()) structured.push(raw.trim());
+      });
+
+      const metaPrice = $('meta[property="product:price:amount"], meta[name="product:price:amount"], meta[property="og:price:amount"], meta[name="og:price:amount"]')
+        .map((_, el) => $(el).attr('content'))
+        .get()
+        .map((v) => (typeof v === 'string' ? v.trim() : ''))
+        .filter(Boolean);
+      if (metaPrice.length) structured.push(`price: ${metaPrice.slice(0, 8).join(', ')}`);
+
       $('script, style, nav, footer, iframe, noscript').remove();
 
       const title = $('title').text().trim();
-      const content = $('body').text().replace(/\s+/g, ' ').trim();
+      const bodyText = $('body').text().replace(/\s+/g, ' ').trim();
+      const structuredText = structured.length ? `\n\n${structured.join('\n')}` : '';
+      const content = `${bodyText}${structuredText}`.trim();
 
       results.push({ url: fetched.finalUrl, title, content });
 
