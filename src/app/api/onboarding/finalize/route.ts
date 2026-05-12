@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { crawlWebsite } from '@/lib/crawler';
-import { processAndStoreKnowledge } from '@/lib/knowledge';
 
 export const runtime = 'nodejs';
 
@@ -39,25 +37,29 @@ export async function POST(req: Request) {
     if (configError) throw configError;
 
     const chatbotId = chatbot.id;
+    const { data: job, error: jobError } = await supabase
+      .from('crawl_jobs')
+      .insert({
+        chatbot_id: chatbotId,
+        user_id: user.id,
+        kind: 'onboarding',
+        status: 'queued',
+        max_pages: 50,
+      })
+      .select('id')
+      .single();
 
-    setTimeout(() => {
-      void (async () => {
-        try {
-          const pages = await crawlWebsite(websiteUrl);
-          await processAndStoreKnowledge(chatbotId, pages);
-        } catch (e) {
-          console.error('Finalize onboarding background error:', e);
-        }
-      })();
-    }, 0);
+    if (jobError || !job) throw new Error(jobError?.message || 'Failed to queue job');
 
     return NextResponse.json({
       success: true,
       chatbotId,
       indexing: true,
+      jobId: job.id,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Finalize onboarding error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -2,6 +2,18 @@ import { NextResponse } from 'next/server';
 import { openai, generateEmbedding } from '@/lib/openai';
 import { createAdminClient } from '@/lib/supabase/server';
 
+type MatchChunkRow = {
+  content: string | null;
+  source_url: string | null;
+};
+
+type HistoryRow = {
+  role: string | null;
+  content: string | null;
+};
+
+type ChatRole = 'user' | 'assistant' | 'system';
+
 function corsHeaders(req: Request) {
   const origin = req.headers.get('origin') ?? '*';
   return {
@@ -41,21 +53,48 @@ export async function POST(req: Request) {
     }
 
     // 2. RAG: Search for relevant context
-    const embedding = await generateEmbedding(message);
-    const { data: chunks, error: matchError } = await supabase.rpc('match_chunks', {
+    const isContactIntent = /\b(contact|email|e-mail|phone|call|book|booking|schedule|consultation|quote|proposal|reach)\b/i.test(
+      message
+    );
+    const retrievalQuery = isContactIntent
+      ? `${message}\n\nContact details: email, phone, address, booking link, contact form, consultation.`
+      : message;
+
+    const embedding = await generateEmbedding(retrievalQuery);
+    const { data: chunksPrimaryRaw } = await supabase.rpc('match_chunks', {
       query_embedding: embedding,
-      match_threshold: 0.3, // Adjust as needed
-      match_count: 5,
-      p_chatbot_id: chatbotId
+      match_threshold: 0.2,
+      match_count: 8,
+      p_chatbot_id: chatbotId,
     });
 
-    const context =
-      chunks
-        ?.map((c: any) => {
-          const source = c.source_url ? `Source: ${c.source_url}\n` : '';
-          return `${source}${c.content}`;
-        })
-        .join('\n\n---\n\n') || '';
+    const chunksPrimary: MatchChunkRow[] = Array.isArray(chunksPrimaryRaw)
+      ? (chunksPrimaryRaw as MatchChunkRow[])
+      : [];
+
+    const { data: chunksFallbackRaw } =
+      chunksPrimary.length < 3
+        ? await supabase.rpc('match_chunks', {
+            query_embedding: embedding,
+            match_threshold: 0.1,
+            match_count: 12,
+            p_chatbot_id: chatbotId,
+          })
+        : { data: null };
+
+    const chunksFallback: MatchChunkRow[] = Array.isArray(chunksFallbackRaw)
+      ? (chunksFallbackRaw as MatchChunkRow[])
+      : [];
+
+    const chunks = chunksPrimary.length ? chunksPrimary : chunksFallback;
+    const context = chunks.map((c) => String(c.content ?? '')).join('\n\n---\n\n') || '';
+    const sourceUrls = Array.from(
+      new Set(
+        chunks
+          .map((c) => (typeof c.source_url === 'string' ? c.source_url.trim() : ''))
+          .filter(Boolean)
+      )
+    ).slice(0, 4);
 
     // 3. Prepare or Get Session
     let currentSessionId = sessionId;
@@ -101,6 +140,17 @@ export async function POST(req: Request) {
       .order('created_at', { ascending: true })
       .limit(10);
 
+    const historyMessages =
+      (Array.isArray(history) ? (history as HistoryRow[]) : [])
+        .map((m) => {
+          const roleRaw = typeof m.role === 'string' ? m.role : '';
+          const role: ChatRole =
+            roleRaw === 'assistant' ? 'assistant' : roleRaw === 'system' ? 'system' : 'user';
+          const content = typeof m.content === 'string' ? m.content : '';
+          return { role, content };
+        })
+        .filter((m) => m.content);
+
     // 6. OpenAI Streaming
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
@@ -114,19 +164,17 @@ export async function POST(req: Request) {
     - ONLY answer using the context provided below. Do not use outside knowledge.
     - If the answer is not in the context, say: "I don't have that information, but you can contact us for help."
     - Never make up facts, prices, dates, or links.
+    - Do not include any URLs in your answer. Do not include a "Sources" section.
+    - If asked about past clients/portfolio (e.g., "Have you worked with restaurants?") and the context doesn't explicitly confirm it, say you don't have confirmed examples.
     - Keep answers concise and helpful.
     - Speak in a ${config.tone || 'professional'} tone.
     - If asked something off-topic or unrelated to the business, politely redirect.
 
     CONTEXT FROM WEBSITE:
     ${context}
-
-    If you referenced specific pages, end with:
-    Sources:
-    - [Page Title](url)
-    Only list URLs that appear in the context above. Never invent links.`,
+`,
         },
-        ...(history?.map(m => ({ role: m.role as any, content: m.content })) || []),
+        ...historyMessages,
       ],
     });
 
@@ -145,6 +193,12 @@ export async function POST(req: Request) {
             assistantContent += text;
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
           }
+        }
+
+        if (sourceUrls.length) {
+          const sourcesText = `\n\nSources:\n${sourceUrls.map((u) => `- ${u}`).join('\n')}`;
+          assistantContent += sourcesText;
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: sourcesText })}\n\n`));
         }
 
         // Save Assistant Message
@@ -167,10 +221,11 @@ export async function POST(req: Request) {
         'Connection': 'keep-alive',
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Chat API error:', error);
+    const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: message },
       { status: 500, headers: corsHeaders(req) }
     );
   }

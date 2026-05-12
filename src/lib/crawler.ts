@@ -14,6 +14,37 @@ type FetchResult =
   | { ok: true; html: string; finalUrl: string; mode: FetchMode; status: number }
   | { ok: false; error: unknown; mode: FetchMode; status?: number }
 
+function normalizeWhitespace(text: string) {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function extractEmails(text: string) {
+  const matches = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? [];
+  const uniq = Array.from(new Set(matches.map((m) => m.trim().toLowerCase())));
+  return uniq.slice(0, 8);
+}
+
+function extractTelPhonesFromAnchors($: cheerio.CheerioAPI) {
+  const phones = new Set<string>();
+  $('a[href^="tel:"]').each((_, el) => {
+    const href = $(el).attr('href') ?? '';
+    const raw = href.replace(/^tel:/i, '').trim();
+    const normalized = raw.replace(/[^\d+]/g, '');
+    if (normalized.length >= 7) phones.add(raw);
+  });
+  return Array.from(phones).slice(0, 8);
+}
+
+function extractMailtoEmailsFromAnchors($: cheerio.CheerioAPI) {
+  const emails = new Set<string>();
+  $('a[href^="mailto:"]').each((_, el) => {
+    const href = $(el).attr('href') ?? '';
+    const raw = href.replace(/^mailto:/i, '').split('?')[0]?.trim() ?? '';
+    if (raw) emails.add(raw.toLowerCase());
+  });
+  return Array.from(emails).slice(0, 8);
+}
+
 function normalizeUrl(input: string) {
   const u = new URL(input);
   u.hash = '';
@@ -69,8 +100,11 @@ async function fetchHtmlDirect(url: string): Promise<FetchResult> {
 
     const html = typeof response.data === 'string' ? response.data : String(response.data ?? '');
     return { ok: true, html, finalUrl: response.request?.res?.responseUrl ?? url, mode: 'direct', status: response.status };
-  } catch (error: any) {
-    const status = error?.response?.status;
+  } catch (error: unknown) {
+    const status =
+      typeof error === 'object' && error !== null
+        ? (error as { response?: { status?: number } }).response?.status
+        : undefined;
     return { ok: false, error, mode: 'direct', status };
   }
 }
@@ -126,8 +160,11 @@ async function fetchHtmlZenrows(url: string): Promise<FetchResult> {
     }
 
     return { ok: false, error: new Error(`ZenRows returned status ${response.status}`), mode: 'zenrows', status: response.status };
-  } catch (error: any) {
-    const status = error?.response?.status;
+  } catch (error: unknown) {
+    const status =
+      typeof error === 'object' && error !== null
+        ? (error as { response?: { status?: number } }).response?.status
+        : undefined;
     return { ok: false, error, mode: 'zenrows', status };
   }
 }
@@ -219,28 +256,6 @@ export async function crawlWebsite(baseUrl: string, maxPages: number = 50): Prom
       if (!fetched.ok) continue;
 
       const $ = cheerio.load(fetched.html);
-      const structured: string[] = [];
-      $('script[type="application/ld+json"]').each((_, el) => {
-        const raw = $(el).text();
-        if (raw && raw.trim()) structured.push(raw.trim());
-      });
-
-      const metaPrice = $('meta[property="product:price:amount"], meta[name="product:price:amount"], meta[property="og:price:amount"], meta[name="og:price:amount"]')
-        .map((_, el) => $(el).attr('content'))
-        .get()
-        .map((v) => (typeof v === 'string' ? v.trim() : ''))
-        .filter(Boolean);
-      if (metaPrice.length) structured.push(`price: ${metaPrice.slice(0, 8).join(', ')}`);
-
-      $('script, style, nav, footer, iframe, noscript').remove();
-
-      const title = $('title').text().trim();
-      const bodyText = $('body').text().replace(/\s+/g, ' ').trim();
-      const structuredText = structured.length ? `\n\n${structured.join('\n')}` : '';
-      const content = `${bodyText}${structuredText}`.trim();
-
-      results.push({ url: fetched.finalUrl, title, content });
-
       $('a[href]').each((_, element) => {
         const href = $(element).attr('href');
         if (!href) return;
@@ -264,6 +279,53 @@ export async function crawlWebsite(baseUrl: string, maxPages: number = 50): Prom
         } catch {
         }
       });
+
+      const structured: string[] = [];
+      $('script[type="application/ld+json"]').each((_, el) => {
+        const raw = $(el).text();
+        if (raw && raw.trim()) structured.push(raw.trim());
+      });
+
+      const metaPrice = $('meta[property="product:price:amount"], meta[name="product:price:amount"], meta[property="og:price:amount"], meta[name="og:price:amount"]')
+        .map((_, el) => $(el).attr('content'))
+        .get()
+        .map((v) => (typeof v === 'string' ? v.trim() : ''))
+        .filter(Boolean);
+      if (metaPrice.length) structured.push(`price: ${metaPrice.slice(0, 8).join(', ')}`);
+
+      const $raw = cheerio.load(fetched.html);
+      $raw('script, style, iframe, noscript').remove();
+      const navText = normalizeWhitespace($raw('nav').text());
+      const footerText = normalizeWhitespace($raw('footer').text());
+      const rawBodyText = normalizeWhitespace($raw('body').text());
+      const emails = Array.from(new Set([...extractMailtoEmailsFromAnchors($raw), ...extractEmails(rawBodyText)])).slice(0, 8);
+      const phones = extractTelPhonesFromAnchors($raw);
+
+      const $content = cheerio.load(fetched.html);
+      $content('script, style, nav, footer, iframe, noscript').remove();
+
+      const title = $content('title').text().trim();
+      const bodyText = normalizeWhitespace($content('body').text());
+      const structuredText = structured.length ? `\n\n${structured.join('\n')}` : '';
+
+      const extraBlocks: string[] = [];
+      const navWorthKeeping =
+        navText &&
+        (/\b(contact|consultation|book|schedule|call|email|phone)\b/i.test(navText) || navText.length <= 220);
+      if (navWorthKeeping) extraBlocks.push(`Navigation: ${navText.slice(0, 600)}`);
+
+      const footerWorthKeeping =
+        footerText &&
+        /\b(contact|consultation|book|schedule|call|email|phone|address)\b/i.test(footerText);
+      if (footerWorthKeeping) extraBlocks.push(`Footer: ${footerText.slice(0, 800)}`);
+
+      if (emails.length) extraBlocks.push(`Emails: ${emails.join(', ')}`);
+      if (phones.length) extraBlocks.push(`Phones: ${phones.join(', ')}`);
+
+      const extrasText = extraBlocks.length ? `\n\n${extraBlocks.join('\n')}` : '';
+      const content = `${bodyText}${structuredText}${extrasText}`.trim();
+
+      results.push({ url: fetched.finalUrl, title, content });
     } catch (error) {
       console.error(`Error crawling ${url}:`, error);
     }
