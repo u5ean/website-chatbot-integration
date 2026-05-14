@@ -15,7 +15,8 @@ AI Website Chatbot SaaS (Next.js App Router + Supabase + OpenAI + Stripe)
 - [x] manual FAQ editor
 - [x] Dashboard Settings page
 - [x] Productionize crawling/embeddings: move /api/onboardin g/finalize + /api/dashboard/chatbots/[id]/recrawl off the request/response path (job/queue), because long crawls will timeout in real hosting.
-- [ ] Lock down widget + APIs for real embeds: CORS allowlist (don’t reflect Origin: * ), rate limit /api/chat , basic abuse protection (per IP/session/chatbot)
+- [ ] Lock down widget + APIs for real embeds: CORS allowlist (don’t reflect Origin: * ), rate limit /api/chat , basic abuse protection (per IP/session/chatbot) (CHECK)
+- [ ] Allow position changing. (FIX)
 - [ ] Make Billing real:: Add Stripe checkout flow + webhook to update profiles.subscription_tier and enforce limits (chatbots count, messages/month).
 - [ ] Deploy + verify end-to-end on a real domain: hosted app URL in NEXT_PUBLIC_APP_URL , widget loads from that URL, and embed works from an external site.
 
@@ -55,6 +56,7 @@ Stripe (test mode):
 Run the SQL files in `supabase/migrations/` in your Supabase project:
 - `supabase/migrations/20260507000000_initial_schema.sql`
 - `supabase/migrations/20260508000000_add_session_tags.sql`
+- `supabase/migrations/20260514000000_lock_down_widget.sql`
 
 You can paste each file into Supabase Dashboard → SQL Editor and run them.
 

@@ -16,6 +16,7 @@ type ChatbotConfig = {
   starter_questions: string[] | null;
   lead_capture_enabled: boolean | null;
   handoff_url: string | null;
+  allowed_origins: string[] | null;
   is_active: boolean | null;
 };
 
@@ -38,6 +39,14 @@ export default function ConfigForm({ chatbot }: { chatbot: ChatbotConfig }) {
     return typeof p === 'string' && p ? p : '#000000';
   }, [chatbot.colors]);
 
+  const defaultAllowedOriginPlaceholder = useMemo(() => {
+    try {
+      return new URL(chatbot.website_url).origin;
+    } catch {
+      return 'https://example.com';
+    }
+  }, [chatbot.website_url]);
+
   const [name, setName] = useState(chatbot.name);
   const [tone, setTone] = useState(chatbot.tone ?? 'professional');
   const [personaName, setPersonaName] = useState(chatbot.persona_name ?? 'AI Assistant');
@@ -48,6 +57,7 @@ export default function ConfigForm({ chatbot }: { chatbot: ChatbotConfig }) {
   const [starterQuestions, setStarterQuestions] = useState((chatbot.starter_questions ?? []).join('\n'));
   const [leadCapture, setLeadCapture] = useState(Boolean(chatbot.lead_capture_enabled));
   const [handoffUrl, setHandoffUrl] = useState(chatbot.handoff_url ?? '');
+  const [allowedOriginsText, setAllowedOriginsText] = useState((chatbot.allowed_origins ?? []).join('\n'));
   const [isActive, setIsActive] = useState(chatbot.is_active !== false);
 
   const [faqs, setFaqs] = useState<ManualFaq[]>([]);
@@ -145,6 +155,20 @@ export default function ConfigForm({ chatbot }: { chatbot: ChatbotConfig }) {
     setSaved(false);
 
     try {
+      const normalizeOrigin = (value: string) => {
+        try {
+          return new URL(value).origin;
+        } catch {
+          return '';
+        }
+      };
+
+      const allowedOrigins = allowedOriginsText
+        .split('\n')
+        .map((s) => normalizeOrigin(s.trim()))
+        .filter(Boolean)
+        .slice(0, 50);
+
       const res = await fetch(`/api/dashboard/chatbots/${chatbot.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -163,6 +187,7 @@ export default function ConfigForm({ chatbot }: { chatbot: ChatbotConfig }) {
             .slice(0, 8),
           lead_capture_enabled: leadCapture,
           handoff_url: handoffUrl || null,
+          allowed_origins: allowedOrigins,
           is_active: isActive,
         }),
       });
@@ -342,6 +367,8 @@ export default function ConfigForm({ chatbot }: { chatbot: ChatbotConfig }) {
               >
                 <option value="bottom-right">Bottom Right</option>
                 <option value="bottom-left">Bottom Left</option>
+                <option value="top-right">Top Right</option>
+                <option value="top-left">Top Left</option>
               </select>
             </div>
           </div>
@@ -376,6 +403,17 @@ export default function ConfigForm({ chatbot }: { chatbot: ChatbotConfig }) {
               value={handoffUrl}
               onChange={(e) => setHandoffUrl(e.target.value)}
               placeholder="https://cal.com/your-team"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Allowed Embed Origins (one per line)</label>
+            <textarea
+              className="w-full border border-gray-300 rounded-lg px-4 py-2"
+              rows={3}
+              value={allowedOriginsText}
+              onChange={(e) => setAllowedOriginsText(e.target.value)}
+              placeholder={defaultAllowedOriginPlaceholder}
             />
           </div>
 

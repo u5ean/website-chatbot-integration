@@ -17,7 +17,7 @@ export default async function DashboardLayout({
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200">
+      <aside className="w-48 bg-white border-r border-gray-200">
         <div className="p-6">
           <Link href="/dashboard" className="text-xl font-bold">
             ChatSaaS AI

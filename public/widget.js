@@ -7,6 +7,9 @@
     script.getAttribute('data-auto-open') === 'true';
   const hideBubble = script.getAttribute('data-hide-bubble') === 'true';
   const hideClose = script.getAttribute('data-hide-close') === 'true';
+  const scriptPosition = script.getAttribute('data-position') || '';
+  const scriptOffsetX = script.getAttribute('data-offset-x');
+  const scriptOffsetY = script.getAttribute('data-offset-y');
 
   if (!chatbotId) {
     console.error('AI Chatbot: Missing data-chatbot-id attribute');
@@ -18,8 +21,10 @@
   style.textContent = `
     #ai-chatbot-bubble {
       position: fixed;
-      bottom: 20px;
-      right: 20px;
+      bottom: var(--ai-bubble-bottom, 20px);
+      top: var(--ai-bubble-top, auto);
+      left: var(--ai-bubble-left, auto);
+      right: var(--ai-bubble-right, 20px);
       width: 60px;
       height: 60px;
       border-radius: 50%;
@@ -37,8 +42,10 @@
     
     #ai-chatbot-container {
       position: fixed;
-      bottom: 90px;
-      right: 20px;
+      bottom: var(--ai-container-bottom, 90px);
+      top: var(--ai-container-top, auto);
+      left: var(--ai-container-left, auto);
+      right: var(--ai-container-right, 20px);
       width: min(480px, calc(100vw - 40px));
       height: min(720px, calc(100vh - 140px));
       background: white;
@@ -53,6 +60,8 @@
       #ai-chatbot-container {
         width: 100%;
         height: 100%;
+        top: 0;
+        left: 0;
         bottom: 0;
         right: 0;
         border-radius: 0;
@@ -141,6 +150,105 @@
   let leadName = '';
   let leadEmail = '';
   let leadCaptured = false;
+  let bubblePosition = 'bottom-right';
+  let offsetX = 20;
+  let offsetY = 20;
+  const bubbleSize = 60;
+  const gap = 10;
+
+  const parsePxInt = (raw, fallback) => {
+    const n = Number(String(raw || '').trim());
+    if (!Number.isFinite(n)) return fallback;
+    const clamped = Math.max(0, Math.min(200, Math.round(n)));
+    return clamped;
+  };
+
+  const normalizePosition = (raw) => {
+    const p = String(raw || '').trim().toLowerCase();
+    if (p === 'bottom-right' || p === 'bottom_right') return 'bottom-right';
+    if (p === 'bottom-left' || p === 'bottom_left') return 'bottom-left';
+    if (p === 'top-right' || p === 'top_right') return 'top-right';
+    if (p === 'top-left' || p === 'top_left') return 'top-left';
+    return '';
+  };
+
+  const setVars = (el, vars) => {
+    for (const k in vars) {
+      el.style.setProperty(k, vars[k]);
+    }
+  };
+
+  const applyPosition = () => {
+    const p = normalizePosition(scriptPosition) || normalizePosition(bubblePosition) || 'bottom-right';
+    const x = offsetX;
+    const y = offsetY;
+    const containerOffset = y + bubbleSize + gap;
+
+    if (p === 'bottom-left') {
+      setVars(bubble, {
+        '--ai-bubble-bottom': `${y}px`,
+        '--ai-bubble-top': 'auto',
+        '--ai-bubble-left': `${x}px`,
+        '--ai-bubble-right': 'auto',
+      });
+      setVars(container, {
+        '--ai-container-bottom': `${containerOffset}px`,
+        '--ai-container-top': 'auto',
+        '--ai-container-left': `${x}px`,
+        '--ai-container-right': 'auto',
+      });
+      return;
+    }
+
+    if (p === 'top-right') {
+      setVars(bubble, {
+        '--ai-bubble-bottom': 'auto',
+        '--ai-bubble-top': `${y}px`,
+        '--ai-bubble-left': 'auto',
+        '--ai-bubble-right': `${x}px`,
+      });
+      setVars(container, {
+        '--ai-container-bottom': 'auto',
+        '--ai-container-top': `${containerOffset}px`,
+        '--ai-container-left': 'auto',
+        '--ai-container-right': `${x}px`,
+      });
+      return;
+    }
+
+    if (p === 'top-left') {
+      setVars(bubble, {
+        '--ai-bubble-bottom': 'auto',
+        '--ai-bubble-top': `${y}px`,
+        '--ai-bubble-left': `${x}px`,
+        '--ai-bubble-right': 'auto',
+      });
+      setVars(container, {
+        '--ai-container-bottom': 'auto',
+        '--ai-container-top': `${containerOffset}px`,
+        '--ai-container-left': `${x}px`,
+        '--ai-container-right': 'auto',
+      });
+      return;
+    }
+
+    setVars(bubble, {
+      '--ai-bubble-bottom': `${y}px`,
+      '--ai-bubble-top': 'auto',
+      '--ai-bubble-left': 'auto',
+      '--ai-bubble-right': `${x}px`,
+    });
+    setVars(container, {
+      '--ai-container-bottom': `${containerOffset}px`,
+      '--ai-container-top': 'auto',
+      '--ai-container-left': 'auto',
+      '--ai-container-right': `${x}px`,
+    });
+  };
+
+  offsetX = parsePxInt(scriptOffsetX, 20);
+  offsetY = parsePxInt(scriptOffsetY, 20);
+  applyPosition();
 
   // Event Listeners
   bubble.onclick = () => {
@@ -412,7 +520,7 @@
     typingIndicator.style.display = 'block';
 
     try {
-      const response = await fetch(`${apiUrl}/api/chat`, {
+      const response = await fetch(`${apiUrl}/api/chat?chatbotId=${encodeURIComponent(chatbotId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -495,9 +603,13 @@
       }
       leadCaptureEnabled = Boolean(config.lead_capture_enabled);
       handoffUrl = typeof config.handoff_url === 'string' ? config.handoff_url : '';
+      if (!scriptPosition && typeof config.bubble_position === 'string' && config.bubble_position.trim()) {
+        bubblePosition = config.bubble_position;
+      }
       loadLead();
       renderHandoff();
       renderLeadPanel();
+      applyPosition();
 
       if (autoOpen) {
         isOpen = true;

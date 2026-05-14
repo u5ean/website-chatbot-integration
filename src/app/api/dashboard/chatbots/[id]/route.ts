@@ -25,6 +25,7 @@ function pickUpdatable(input: Record<string, unknown>) {
     'starter_questions',
     'lead_capture_enabled',
     'handoff_url',
+    'allowed_origins',
     'is_active',
   ];
 
