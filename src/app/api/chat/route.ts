@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { openai, generateEmbedding } from '@/lib/openai';
+import { getOpenAI, generateEmbedding } from '@/lib/openai';
 import { createAdminClient } from '@/lib/supabase/server';
 
 type MatchChunkRow = {
@@ -302,7 +302,7 @@ export async function POST(req: Request) {
         .filter((m) => m.content);
 
     // 6. OpenAI Streaming
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: 'gpt-4o',
       stream: true,
       messages: [

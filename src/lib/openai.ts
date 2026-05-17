@@ -1,14 +1,19 @@
 import OpenAI from 'openai';
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('Missing OPENAI_API_KEY environment variable');
+let client: OpenAI | null = null;
+
+export function getOpenAI() {
+  if (client) return client;
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('Missing OPENAI_API_KEY environment variable');
+  }
+  client = new OpenAI({ apiKey });
+  return client;
 }
 
-export const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export async function generateEmbedding(text: string) {
+  const openai = getOpenAI();
   const response = await openai.embeddings.create({
     model: 'text-embedding-3-small',
     input: text.replace(/\n/g, ' '),

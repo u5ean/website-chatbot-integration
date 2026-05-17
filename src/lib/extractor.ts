@@ -1,4 +1,4 @@
-import { openai } from '@/lib/openai';
+import { getOpenAI } from '@/lib/openai';
 
 export async function extractBusinessInfo(pages: { url: string; content: string }[]) {
   // Use the first few pages (home, about, etc.) to extract info to save tokens
@@ -7,7 +7,7 @@ export async function extractBusinessInfo(pages: { url: string; content: string 
     .map(p => `URL: ${p.url}\nContent: ${p.content.substring(0, 2000)}`)
     .join('\n\n');
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: 'gpt-4o',
     messages: [
       {

@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server';
-import { stripe } from '@/lib/stripe';
 
 export default async function BillingPage() {
   const supabase = await createClient();
