@@ -60,16 +60,17 @@ function buildAllowedOrigins(config: any) {
   return Array.from(new Set([appOrigin, websiteOrigin, ...rowAllowed, ...envAllowed].filter(Boolean)));
 }
 
-function corsHeaders(req: Request, allowed: { ok: true; origin: string } | { ok: false }) {
+function corsHeaders(req: Request, allowed: { ok: true; origin: string } | { ok: false }): Record<string, string> {
   if (!allowed.ok) {
     return {
       Vary: 'Origin',
     };
   }
+  const requestedHeaders = req.headers.get('access-control-request-headers');
   return {
     'Access-Control-Allow-Origin': allowed.origin,
     'Access-Control-Allow-Methods': 'POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': requestedHeaders || 'Content-Type',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   };
@@ -152,7 +153,7 @@ export async function POST(req: Request) {
           })()
         : ({ ok: false as const } as const);
 
-    const cors = corsAllowed.ok ? corsHeaders(req, corsAllowed) : {};
+    const cors: Record<string, string> = corsAllowed.ok ? corsHeaders(req, corsAllowed) : {};
 
     if (originRaw && !corsAllowed.ok) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
