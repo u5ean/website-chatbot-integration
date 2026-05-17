@@ -2,10 +2,14 @@
   "name": "website-chat-integration",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "worker:jobs": "node scripts/jobs-worker.mjs",
     "lint": "eslint"
   },
   "dependencies": {
