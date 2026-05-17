@@ -534,6 +534,18 @@
       typingIndicator.style.display = 'none';
       
       if (!response.ok) {
+        if (response.status === 403) {
+          const origin = window.location && window.location.origin ? window.location.origin : '';
+          addMessage(
+            `Your site isn’t allowlisted${origin ? ` (${origin})` : ''}. Ask the chatbot owner to add it in Dashboard → Chatbot → Allowed Embed Origins.`,
+            'assistant'
+          );
+          return;
+        }
+        if (response.status === 429) {
+          addMessage('Too many requests. Please wait a minute and try again.', 'assistant');
+          return;
+        }
         const errText = await response.text().catch(() => '');
         throw new Error(errText || 'Failed to send message');
       }
@@ -580,7 +592,16 @@
     } catch (error) {
       typingIndicator.style.display = 'none';
       console.error('AI Chatbot: sendMessage failed', error);
-      addMessage(`Sorry, I encountered an error. ${error?.message ? `(${error.message})` : ''}`.trim(), 'assistant');
+      const msg = String(error?.message || '');
+      if (msg.toLowerCase().includes('failed to fetch')) {
+        const origin = window.location && window.location.origin ? window.location.origin : '';
+        addMessage(
+          `Your site isn’t allowlisted${origin ? ` (${origin})` : ''}. Ask the chatbot owner to add it in Dashboard → Chatbot → Allowed Embed Origins.`,
+          'assistant'
+        );
+        return;
+      }
+      addMessage(`Sorry, I encountered an error. ${msg ? `(${msg})` : ''}`.trim(), 'assistant');
     }
   };
 
@@ -589,8 +610,22 @@
 
   // Fetch initial config
   fetch(`${apiUrl}/api/chatbot/config?id=${chatbotId}`)
-    .then(r => r.json())
+    .then(async (r) => {
+      if (r.ok) return r.json();
+      if (r.status === 403) {
+        const origin = window.location && window.location.origin ? window.location.origin : '';
+        addMessage(
+          `Your site isn’t allowlisted${origin ? ` (${origin})` : ''}. Ask the chatbot owner to add it in Dashboard → Chatbot → Allowed Embed Origins.`,
+          'assistant'
+        );
+        setChatEnabled(false);
+        return null;
+      }
+      const text = await r.text().catch(() => '');
+      throw new Error(text || 'Failed to load config');
+    })
     .then(config => {
+      if (!config) return;
       if (config.name) shadow.getElementById('chat-title').textContent = config.name;
       if (config.colors) {
         const header = shadow.querySelector('.header');
@@ -616,5 +651,16 @@
         container.style.display = 'flex';
       }
     })
-    .catch(err => console.error('AI Chatbot: Failed to load config', err));
+    .catch(err => {
+      console.error('AI Chatbot: Failed to load config', err);
+      const msg = String(err?.message || '');
+      if (msg.toLowerCase().includes('failed to fetch')) {
+        const origin = window.location && window.location.origin ? window.location.origin : '';
+        addMessage(
+          `Your site isn’t allowlisted${origin ? ` (${origin})` : ''}. Ask the chatbot owner to add it in Dashboard → Chatbot → Allowed Embed Origins.`,
+          'assistant'
+        );
+        setChatEnabled(false);
+      }
+    });
 })();
