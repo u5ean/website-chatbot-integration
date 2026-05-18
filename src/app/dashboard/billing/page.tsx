@@ -1,4 +1,18 @@
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
+
+function normalizeTier(tier: string | null | undefined) {
+  const t = typeof tier === 'string' ? tier.toLowerCase() : 'free';
+  if (t === 'agency') return 'Agency';
+  if (t === 'pro') return 'Pro';
+  return 'Free';
+}
+
+function limitsForTier(tier: string) {
+  const t = tier.toLowerCase();
+  if (t === 'agency') return { chatbots: 999, messages: 50000 };
+  if (t === 'pro') return { chatbots: 3, messages: 5000 };
+  return { chatbots: 1, messages: 500 };
+}
 
 export default async function BillingPage() {
   const supabase = await createClient();
@@ -8,7 +22,35 @@ export default async function BillingPage() {
     .from('profiles')
     .select('*')
     .eq('id', user?.id)
-    .single();
+    .maybeSingle();
+
+  const tierName = normalizeTier(profile?.subscription_tier);
+  const limits = limitsForTier(tierName);
+
+  const chatbotCountRes = await supabase
+    .from('chatbot_configs')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user?.id ?? '');
+
+  const chatbotCount = typeof chatbotCountRes.count === 'number' ? chatbotCountRes.count : 0;
+
+  const admin = await createAdminClient();
+
+  const monthStart = new Date();
+  monthStart.setUTCDate(1);
+  monthStart.setUTCHours(0, 0, 0, 0);
+
+  const { data: monthly } = user?.id
+    ? await admin
+        .from('user_monthly_usage')
+        .select('messages_used')
+        .eq('user_id', user.id)
+        .eq('month_start', monthStart.toISOString().slice(0, 10))
+        .maybeSingle()
+    : { data: null as any };
+
+  const messagesUsed = typeof monthly?.messages_used === 'number' ? monthly.messages_used : 0;
+  const pct = limits.messages ? Math.min(100, Math.round((messagesUsed / limits.messages) * 100)) : 0;
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -21,28 +63,42 @@ export default async function BillingPage() {
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Current Plan</p>
-            <h3 className="text-xl font-bold mt-1 capitalize">{profile?.subscription_tier || 'Free'}</h3>
+            <h3 className="text-xl font-bold mt-1">{tierName}</h3>
           </div>
-          <button className="bg-black text-white px-4 py-2 rounded-lg text-sm font-semibold">
-            Upgrade Plan
-          </button>
+          <div className="flex items-center gap-3">
+            {tierName === 'Free' ? (
+              <form method="POST" action="/api/billing/checkout?tier=pro">
+                <button className="bg-black text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                  Upgrade
+                </button>
+              </form>
+            ) : (
+              <form method="POST" action="/api/billing/portal">
+                <button className="bg-black text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                  Manage billing
+                </button>
+              </form>
+            )}
+          </div>
         </div>
         <div className="p-6 bg-gray-50">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <p className="text-sm text-gray-500">Messages this month</p>
-              <p className="text-2xl font-bold">124 / 500</p>
+              <p className="text-2xl font-bold">{messagesUsed} / {limits.messages}</p>
               <div className="w-full bg-gray-200 h-2 rounded-full mt-2">
-                <div className="bg-black h-2 rounded-full w-[25%]" />
+                <div className="bg-black h-2 rounded-full" style={{ width: `${pct}%` }} />
               </div>
             </div>
             <div>
               <p className="text-sm text-gray-500">Active Chatbots</p>
-              <p className="text-2xl font-bold">1 / 1</p>
+              <p className="text-2xl font-bold">{chatbotCount} / {limits.chatbots >= 999 ? '∞' : limits.chatbots}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Next billing date</p>
-              <p className="text-2xl font-bold">-</p>
+              <p className="text-2xl font-bold">
+                {profile?.current_period_end ? new Date(profile.current_period_end).toLocaleDateString() : '—'}
+              </p>
             </div>
           </div>
         </div>
@@ -66,9 +122,23 @@ export default async function BillingPage() {
                 </li>
               ))}
             </ul>
-            <button className="w-full py-2 border border-black rounded-lg text-sm font-semibold hover:bg-gray-50">
-              {tier.name === (profile?.subscription_tier || 'Free') ? 'Current Plan' : 'Select Plan'}
-            </button>
+            {tier.name === tierName ? (
+              <button disabled className="w-full py-2 border border-black rounded-lg text-sm font-semibold bg-gray-50">
+                Current Plan
+              </button>
+            ) : tier.name === 'Free' ? (
+              <form method="POST" action="/api/billing/portal">
+                <button className="w-full py-2 border border-black rounded-lg text-sm font-semibold hover:bg-gray-50">
+                  Manage billing
+                </button>
+              </form>
+            ) : (
+              <form method="POST" action={`/api/billing/checkout?tier=${tier.name.toLowerCase()}`}>
+                <button className="w-full py-2 border border-black rounded-lg text-sm font-semibold hover:bg-gray-50">
+                  Select Plan
+                </button>
+              </form>
+            )}
           </div>
         ))}
       </div>

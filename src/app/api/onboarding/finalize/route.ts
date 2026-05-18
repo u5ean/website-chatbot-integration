@@ -3,6 +3,13 @@ import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 
+function chatbotLimitForTier(tier: string | null | undefined) {
+  const t = typeof tier === 'string' ? tier.toLowerCase() : 'free';
+  if (t === 'agency') return 999;
+  if (t === 'pro') return 3;
+  return 1;
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
@@ -10,6 +17,26 @@ export async function POST(req: Request) {
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('subscription_tier')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    const limit = chatbotLimitForTier(profile?.subscription_tier ?? 'free');
+    const { count } = await supabase
+      .from('chatbot_configs')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id);
+
+    const chatbotCount = typeof count === 'number' ? count : 0;
+    if (chatbotCount >= limit) {
+      return NextResponse.json(
+        { error: 'Chatbot limit reached. Upgrade your plan to create more chatbots.' },
+        { status: 402 }
+      );
     }
 
     const body = await req.json();

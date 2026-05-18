@@ -14,6 +14,13 @@ type HistoryRow = {
 
 type ChatRole = 'user' | 'assistant' | 'system';
 
+function messageLimitForTier(tier: string | null | undefined) {
+  const t = typeof tier === 'string' ? tier.toLowerCase() : 'free';
+  if (t === 'agency') return 50000;
+  if (t === 'pro') return 5000;
+  return 500;
+}
+
 function normalizeOrigin(input: string) {
   try {
     return new URL(input).origin.toLowerCase();
@@ -273,6 +280,31 @@ export async function POST(req: Request) {
         { error: 'Rate limit exceeded' },
         { status: 429, headers: { ...cors, 'Retry-After': '60' } }
       );
+    }
+
+    const ownerId = typeof (config as any)?.user_id === 'string' ? String((config as any).user_id) : '';
+    if (ownerId) {
+      const { data: ownerProfile } = await supabase
+        .from('profiles')
+        .select('subscription_tier')
+        .eq('id', ownerId)
+        .maybeSingle();
+
+      const limit = messageLimitForTier(ownerProfile?.subscription_tier ?? 'free');
+      const { data: usageRaw, error: usageError } = await supabase.rpc('consume_messages', {
+        p_user_id: ownerId,
+        p_limit: limit,
+      });
+      if (usageError) throw new Error(usageError.message);
+
+      const usage = Array.isArray(usageRaw) ? (usageRaw[0] as any) : (usageRaw as any);
+      const allowed = Boolean(usage?.allowed);
+      if (!allowed) {
+        return NextResponse.json(
+          { error: 'Monthly message limit reached. Upgrade your plan to continue.' },
+          { status: 402, headers: cors }
+        );
+      }
     }
 
     // 4. Save User Message
