@@ -18,7 +18,7 @@ function messageLimitForTier(tier: string | null | undefined) {
   const t = typeof tier === 'string' ? tier.toLowerCase() : 'free';
   if (t === 'agency') return 50000;
   if (t === 'pro') return 5000;
-  return 500;
+  return 100;
 }
 
 function normalizeOrigin(input: string) {

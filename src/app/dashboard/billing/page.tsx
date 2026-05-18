@@ -11,7 +11,7 @@ function limitsForTier(tier: string) {
   const t = tier.toLowerCase();
   if (t === 'agency') return { chatbots: 999, messages: 50000 };
   if (t === 'pro') return { chatbots: 3, messages: 5000 };
-  return { chatbots: 1, messages: 500 };
+  return { chatbots: 1, messages: 100 };
 }
 
 export default async function BillingPage() {
@@ -107,7 +107,7 @@ export default async function BillingPage() {
       <h3 className="text-lg font-bold mb-4">Subscription Tiers</h3>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
-          { name: 'Free', price: '$0', features: ['1 Chatbot', '500 messages/mo', 'Basic RAG'] },
+          { name: 'Free', price: '$0', features: ['1 Chatbot', '100 messages/mo', 'Basic RAG'] },
           { name: 'Pro', price: '$29', features: ['3 Chatbots', '5,000 messages/mo', 'Advanced RAG', 'Lead Capture'] },
           { name: 'Agency', price: '$99', features: ['Unlimited Chatbots', '50,000 messages/mo', 'Priority Support', 'White-label'] },
         ].map((tier) => (
