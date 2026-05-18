@@ -17,7 +17,7 @@ export default async function EmbedPage({
 
   if (!chatbot) notFound();
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://xeplyai.up.railway.app/';
   const embed = `<script src="${appUrl}/widget.js" data-chatbot-id="${chatbot.id}" data-api-url="${appUrl}" async></script>`;
 
   return (

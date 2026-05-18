@@ -17,7 +17,7 @@ export default async function PreviewPage({
 
   if (!chatbot) notFound();
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://xeplyai.up.railway.app/';
 
   return (
     <div className="min-h-screen bg-gray-50">
