@@ -1,6 +1,32 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+function isWaitlistModeEnabled() {
+  const v = process.env.WAITLIST_MODE;
+  if (!v) return false;
+  const s = v.trim().toLowerCase();
+  return s === '1' || s === 'true' || s === 'yes' || s === 'on';
+}
+
+function parseAdminEmails() {
+  const raw = process.env.WAITLIST_ADMIN_EMAILS;
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isAllowedPublicPath(pathname: string) {
+  if (pathname === '/') return true;
+  if (pathname === '/login') return true;
+  if (pathname.startsWith('/auth/')) return true;
+  if (pathname === '/api/waitlist') return true;
+  if (pathname === '/api/webhooks/stripe') return true;
+  if (pathname === '/api/jobs/process') return true;
+  return false;
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -33,7 +59,29 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (isWaitlistModeEnabled()) {
+    const pathname = request.nextUrl.pathname;
+    if (isAllowedPublicPath(pathname)) {
+      return response;
+    }
+
+    const email = user?.email?.toLowerCase() ?? null;
+    const isAdmin = email ? parseAdminEmails().includes(email) : false;
+    if (isAdmin) {
+      return response;
+    }
+
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unavailable' }, { status: 403 });
+    }
+
+    const url = request.nextUrl.clone();
+    url.pathname = '/';
+    url.search = '';
+    return NextResponse.redirect(url);
+  }
 
   return response
 }
