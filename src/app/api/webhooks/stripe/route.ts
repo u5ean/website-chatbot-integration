@@ -12,6 +12,17 @@ function tierFromPriceId(priceId: string) {
   return 'free';
 }
 
+async function updateProfileByUserId(
+  admin: Awaited<ReturnType<typeof createAdminClient>>,
+  userId: string,
+  patch: Record<string, unknown>
+) {
+  if (!userId) return false;
+  const { error } = await admin.from('profiles').update(patch).eq('id', userId);
+  if (error) throw new Error(error.message);
+  return true;
+}
+
 async function upsertProfileByCustomerId(
   admin: Awaited<ReturnType<typeof createAdminClient>>,
   stripeCustomerId: string,
@@ -40,6 +51,7 @@ export async function POST(req: Request) {
     const event = stripe.webhooks.constructEvent(rawBody, sig, secret);
 
     const admin = await createAdminClient();
+    console.log('stripe_webhook_event', event.type);
 
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as any;
@@ -49,7 +61,7 @@ export async function POST(req: Request) {
       const tierMeta = typeof session?.metadata?.tier === 'string' ? session.metadata.tier : '';
 
       if (metaUserId) {
-        await admin
+        const { error } = await admin
           .from('profiles')
           .update({
             ...(customerId ? { stripe_customer_id: customerId } : {}),
@@ -57,6 +69,7 @@ export async function POST(req: Request) {
             ...(tierMeta ? { subscription_tier: tierMeta } : {}),
           })
           .eq('id', metaUserId);
+        if (error) throw new Error(error.message);
       }
     }
 
@@ -68,15 +81,22 @@ export async function POST(req: Request) {
       const periodEnd = typeof sub?.current_period_end === 'number' ? sub.current_period_end : null;
       const priceId = typeof sub?.items?.data?.[0]?.price?.id === 'string' ? sub.items.data[0].price.id : '';
       const tier = priceId ? tierFromPriceId(priceId) : 'free';
+      const metaUserId = typeof sub?.metadata?.user_id === 'string' ? sub.metadata.user_id : '';
 
-      if (customerId) {
-        await upsertProfileByCustomerId(admin, customerId, {
-          stripe_subscription_id: subscriptionId || null,
-          stripe_price_id: priceId || null,
-          subscription_status: status || null,
-          current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
-          subscription_tier: tier,
-        });
+      const patch = {
+        ...(customerId ? { stripe_customer_id: customerId } : {}),
+        stripe_subscription_id: subscriptionId || null,
+        stripe_price_id: priceId || null,
+        subscription_status: status || null,
+        current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+        subscription_tier: tier,
+      };
+
+      if (metaUserId) {
+        await updateProfileByUserId(admin, metaUserId, patch);
+      } else if (customerId) {
+        const updated = await upsertProfileByCustomerId(admin, customerId, patch);
+        if (!updated) console.log('stripe_webhook_no_profile_for_customer', customerId);
       }
     }
 
@@ -84,14 +104,19 @@ export async function POST(req: Request) {
       const sub = event.data.object as any;
       const customerId = typeof sub?.customer === 'string' ? sub.customer : '';
       const status = typeof sub?.status === 'string' ? sub.status : 'canceled';
-      if (customerId) {
-        await upsertProfileByCustomerId(admin, customerId, {
-          stripe_subscription_id: null,
-          stripe_price_id: null,
-          subscription_status: status,
-          current_period_end: null,
-          subscription_tier: 'free',
-        });
+      const metaUserId = typeof sub?.metadata?.user_id === 'string' ? sub.metadata.user_id : '';
+      const patch = {
+        stripe_subscription_id: null,
+        stripe_price_id: null,
+        subscription_status: status,
+        current_period_end: null,
+        subscription_tier: 'free',
+      };
+      if (metaUserId) {
+        await updateProfileByUserId(admin, metaUserId, patch);
+      } else if (customerId) {
+        const updated = await upsertProfileByCustomerId(admin, customerId, patch);
+        if (!updated) console.log('stripe_webhook_no_profile_for_customer', customerId);
       }
     }
 
@@ -101,4 +126,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
-
