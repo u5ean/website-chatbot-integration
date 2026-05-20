@@ -16,8 +16,9 @@ AI Website Chatbot SaaS (Next.js App Router + Supabase + OpenAI + Stripe)
 - [x] Dashboard Settings page
 - [x] Productionize crawling/embeddings: move /api/onboardin g/finalize + /api/dashboard/chatbots/[id]/recrawl off the request/response path (job/queue), because long crawls will timeout in real hosting.
 - [x] Lock down widget + APIs for real embeds: CORS allowlist (don’t reflect Origin: * ), rate limit /api/chat , basic abuse protection (per IP/session/chatbot) (CHECK)
-- [ ] Allow position changing. (FIX)
 - [ ] Make Billing real:: Add Stripe checkout flow + webhook to update profiles.subscription_tier and enforce limits (chatbots count, messages/month).
+- [ ] Allow position changing. (FIX)
+- [ ] UI Upgrade + Mobile Optimisation
 - [ ] Deploy + verify end-to-end on a real domain: hosted app URL in NEXT_PUBLIC_APP_URL , widget loads from that URL, and embed works from an external site.
 
 ## Getting Started
