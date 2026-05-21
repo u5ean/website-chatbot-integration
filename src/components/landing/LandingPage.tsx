@@ -226,7 +226,7 @@ export function LandingPage() {
                   </div>
                 </Reveal>
                 <Reveal delayMs={80}>
-                  <h1 className="mt-5 text-4xl sm:text-6xl font-semibold tracking-tight text-gray-900">
+                  <h1 className="mt-5 text-4xl sm:text-6xl font-semibold tracking-tight text-white-900">
                     Turn Your Website Into an AI Sales Assistant
                   </h1>
                 </Reveal>
