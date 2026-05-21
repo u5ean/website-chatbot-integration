@@ -207,7 +207,7 @@ export function LandingPage() {
 
   return (
     <ToastProvider>
-      <div className="min-h-screen bg-white text-gray-900 overflow-x-hidden">
+      <div className="min-h-screen bg-transparent text-gray-900 overflow-x-hidden">
         <div className="pointer-events-none fixed inset-0 -z-10">
           <div className="absolute -top-20 left-1/2 h-[520px] w-[780px] -translate-x-1/2 rounded-full bg-gradient-to-r from-gray-900/10 via-gray-900/0 to-gray-900/10 blur-3xl" />
           <div className="absolute top-[55vh] left-[-160px] h-[420px] w-[420px] rounded-full bg-gradient-to-br from-emerald-300/10 to-sky-300/10 blur-3xl" />
