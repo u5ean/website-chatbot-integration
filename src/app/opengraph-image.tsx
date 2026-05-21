@@ -63,7 +63,7 @@ export default function OpenGraphImage() {
           </div>
         </div>
 
-        <div style={{ position: 'relative', marginTop: 36 }}>
+        <div style={{ position: 'relative', marginTop: 36, display: 'flex', flexDirection: 'column' }}>
           <div
             style={{
               fontSize: 66,
@@ -124,4 +124,3 @@ export default function OpenGraphImage() {
     { ...size }
   );
 }
-
