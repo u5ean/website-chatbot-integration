@@ -3,6 +3,9 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --brand: #111827;
+  --brand-accent: #7c3aed;
+  --brand-accent-2: #06b6d4;
 }
 
 html {
@@ -20,11 +23,20 @@ html {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --brand: #e5e7eb;
+    --brand-accent: #a78bfa;
+    --brand-accent-2: #22d3ee;
   }
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
+  background-image:
+    radial-gradient(900px 500px at 18% 14%, color-mix(in srgb, var(--brand-accent) 22%, transparent), transparent 62%),
+    radial-gradient(900px 500px at 82% 18%, color-mix(in srgb, var(--brand-accent-2) 18%, transparent), transparent 60%),
+    radial-gradient(1000px 560px at 55% 88%, color-mix(in srgb, var(--brand) 10%, transparent), transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--background) 92%, var(--brand) 8%), var(--background));
+  background-attachment: fixed;
   color: black;
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
