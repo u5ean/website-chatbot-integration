@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import { Navbar } from '@/components/landing/Navbar';
 import { Reveal } from '@/components/landing/Reveal';
 import { ToastProvider } from '@/components/landing/ToastProvider';
@@ -129,6 +132,57 @@ function ChatbotMockup() {
   );
 }
 
+function formatCountdownParts(msRemaining: number) {
+  const safe = Math.max(0, msRemaining);
+  const totalSeconds = Math.floor(safe / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  return {
+    days,
+    hours: pad2(hours),
+    minutes: pad2(minutes),
+    seconds: pad2(seconds),
+    done: safe === 0,
+  };
+}
+
+function PresaleCountdown({
+  targetIso,
+  discountText,
+}: {
+  targetIso: string;
+  discountText: string;
+}) {
+  const target = useMemo(() => new Date(targetIso).getTime(), [targetIso]);
+  const [now, setNow] = useState<number | null>(null);
+
+  useEffect(() => {
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const parts = formatCountdownParts(target - (now ?? target));
+  const timeText = parts.done
+    ? 'Presale live'
+    : `Presale ends in ${parts.days}d ${parts.hours}h ${parts.minutes}m`;
+
+  return (
+    <div className="inline-flex flex-wrap items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/80 px-4 py-2 text-xs text-emerald-900 shadow-sm">
+      <span className="h-2 w-2 rounded-full bg-emerald-500" />
+      <span className="font-semibold">{timeText}</span>
+      <span className="hidden sm:inline-flex font-mono text-emerald-800/90">
+        {parts.done ? null : `${parts.seconds}s`}
+      </span>
+      <span className="text-emerald-700">•</span>
+      <span className="font-semibold text-emerald-700">{discountText}</span>
+    </div>
+  );
+}
+
 function SectionHeading({
   eyebrow,
   title,
@@ -148,6 +202,9 @@ function SectionHeading({
 }
 
 export function LandingPage() {
+  const presaleEndsAtIso = '2026-06-01T00:00:00Z';
+  const presaleDiscountText = 'Presale discount available';
+
   return (
     <ToastProvider>
       <div className="min-h-screen bg-white text-gray-900 overflow-x-hidden">
@@ -164,9 +221,12 @@ export function LandingPage() {
             <div className="grid gap-12 lg:grid-cols-2 lg:items-stretch">
               <div>
                 <Reveal>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-4 py-2 text-xs text-gray-700 shadow-sm">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                    Launching soon • Early access waitlist open
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-4 py-2 text-xs text-gray-700 shadow-sm">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                      Launching soon • Early access waitlist open
+                    </div>
+                    <PresaleCountdown targetIso={presaleEndsAtIso} discountText={presaleDiscountText} />
                   </div>
                 </Reveal>
                 <Reveal delayMs={80}>
