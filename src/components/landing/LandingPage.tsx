@@ -168,7 +168,7 @@ function PresaleCountdown({
   const parts = formatCountdownParts(target - (now ?? target));
   const timeText = parts.done
     ? 'Presale live'
-    : `Presale ends in ${parts.days}d ${parts.hours}h ${parts.minutes}m`;
+    : ` Presale starts in ${parts.days}d ${parts.hours}h ${parts.minutes}m`;
 
   return (
     <div className="inline-flex flex-wrap items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/80 px-4 py-2 text-xs text-emerald-900 shadow-sm">
@@ -203,7 +203,7 @@ function SectionHeading({
 
 export function LandingPage() {
   const presaleEndsAtIso = '2026-06-01T00:00:00Z';
-  const presaleDiscountText = 'Presale discount available';
+  const presaleDiscountText = 'Join the waitlist for Presale Discount';
 
   return (
     <ToastProvider>
@@ -222,10 +222,6 @@ export function LandingPage() {
               <div>
                 <Reveal>
                   <div className="flex flex-wrap items-center gap-3">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-4 py-2 text-xs text-gray-700 shadow-sm">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                      Launching soon • Early access waitlist open
-                    </div>
                     <PresaleCountdown targetIso={presaleEndsAtIso} discountText={presaleDiscountText} />
                   </div>
                 </Reveal>
