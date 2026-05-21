@@ -180,30 +180,6 @@ export function LandingPage() {
                   </p>
                 </Reveal>
 
-                <Reveal delayMs={200}>
-                  <div id="waitlist" className="mt-8 rounded-3xl border border-gray-200 bg-white/70 backdrop-blur shadow-xl p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-semibold text-gray-900">Join the waitlist</div>
-                        <div className="mt-1 text-xs text-gray-500">Get early access + launch pricing.</div>
-                      </div>
-                      <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
-                        <span className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 shadow-sm">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                          No credit card
-                        </span>
-                        <span className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 shadow-sm">
-                          <span className="h-1.5 w-1.5 rounded-full bg-gray-900" />
-                          Cancel anytime
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <WaitlistForm source="hero" compact />
-                    </div>
-                  </div>
-                </Reveal>
-
                 <Reveal delayMs={260}>
                   <div className="mt-6 grid grid-cols-3 gap-3 max-w-xl">
                     <div className="rounded-2xl border border-gray-200 bg-white/70 p-4 shadow-sm">
@@ -248,6 +224,30 @@ export function LandingPage() {
               <Reveal delayMs={120} className="lg:justify-self-end">
                 <ChatbotMockup />
               </Reveal>
+
+              <Reveal delayMs={200}>
+                  <div id="waitlist" className="mt-8 rounded-3xl border border-gray-200 bg-white/70 backdrop-blur shadow-xl p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900">Join the waitlist</div>
+                        <div className="mt-1 text-xs text-gray-500">Get early access + launch pricing.</div>
+                      </div>
+                      <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 shadow-sm">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          No credit card
+                        </span>
+                        <span className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 shadow-sm">
+                          <span className="h-1.5 w-1.5 rounded-full bg-gray-900" />
+                          Cancel anytime
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <WaitlistForm source="hero" compact />
+                    </div>
+                  </div>
+                </Reveal>
             </div>
           </section>
 
