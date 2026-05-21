@@ -75,9 +75,9 @@ function FeatureIcon({ name }: { name: string }) {
 
 function ChatbotMockup() {
   return (
-    <div className="relative w-full max-w-[480px]">
+    <div className="relative lg:h-full">
       <div className="absolute -inset-6 rounded-[32px] bg-gradient-to-br from-gray-900/10 via-gray-900/0 to-gray-900/10 blur-2xl" />
-      <div className="relative rounded-[32px] border border-gray-200 bg-white/80 backdrop-blur shadow-2xl overflow-hidden">
+      <div className="relative rounded-[32px] border border-gray-200 bg-white/80 backdrop-blur shadow-2xl overflow-hidden lg:h-full lg:flex lg:flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
           <div className="flex items-center gap-2">
             <div className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
@@ -89,7 +89,7 @@ function ChatbotMockup() {
             <div className="h-2 w-2 rounded-full bg-gray-300" />
           </div>
         </div>
-        <div className="p-5 space-y-3">
+        <div className="p-5 space-y-3 lg:flex-1 lg:overflow-auto">
           <div className="flex justify-start">
             <div className="max-w-[85%] rounded-2xl rounded-bl-md border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm">
               Hi! I can answer questions about your services, pricing, and availability.
@@ -161,8 +161,8 @@ export function LandingPage() {
 
         <main>
           <section className="mx-auto max-w-6xl px-4 pt-14 pb-12 sm:pt-20 sm:pb-20">
-            <div className="grid gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
-              <div className="max-w-[560px] lg:pr-6 lg:row-span-2">
+            <div className="grid gap-12 lg:grid-cols-2 lg:items-stretch">
+              <div>
                 <Reveal>
                   <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/70 px-4 py-2 text-xs text-gray-700 shadow-sm">
                     <span className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -178,6 +178,30 @@ export function LandingPage() {
                   <p className="mt-5 text-lg text-gray-600 max-w-xl">
                     Paste your URL, let the AI learn your business, and embed a high-converting chatbot in minutes. Capture leads, answer FAQs, and hand off to humans when it matters.
                   </p>
+                </Reveal>
+
+                <Reveal delayMs={200}>
+                  <div id="waitlist" className="mt-8 rounded-3xl border border-gray-200 bg-white/70 backdrop-blur shadow-xl p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900">Join the waitlist</div>
+                        <div className="mt-1 text-xs text-gray-500">Get early access + launch pricing.</div>
+                      </div>
+                      <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 shadow-sm">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          No credit card
+                        </span>
+                        <span className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 shadow-sm">
+                          <span className="h-1.5 w-1.5 rounded-full bg-gray-900" />
+                          Cancel anytime
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <WaitlistForm source="hero" compact />
+                    </div>
+                  </div>
                 </Reveal>
 
                 <Reveal delayMs={260}>
@@ -221,34 +245,7 @@ export function LandingPage() {
                 </Reveal>
               </div>
 
-              <Reveal delayMs={200} className="lg:col-start-2 lg:row-start-2 lg:justify-self-end w-full max-w-[480px]">
-                <div id="waitlist" className="rounded-3xl border border-gray-200 bg-white/70 backdrop-blur shadow-xl p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold text-gray-900">Join the waitlist</div>
-                      <div className="mt-1 text-xs text-gray-500">Get early access + launch pricing.</div>
-                    </div>
-                    <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
-                      <span className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 shadow-sm">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        No credit card
-                      </span>
-                      <span className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 shadow-sm">
-                        <span className="h-1.5 w-1.5 rounded-full bg-gray-900" />
-                        Cancel anytime
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <WaitlistForm source="hero" compact />
-                  </div>
-                </div>
-              </Reveal>
-
-              <Reveal
-                delayMs={120}
-                className="lg:col-start-2 lg:row-start-1 lg:justify-self-end lg:mt-6 xl:mt-8 lg:scale-[1.06] xl:scale-[1.1] origin-top-right"
-              >
+              <Reveal delayMs={120} className="lg:justify-self-end lg:self-stretch">
                 <ChatbotMockup />
               </Reveal>
             </div>
