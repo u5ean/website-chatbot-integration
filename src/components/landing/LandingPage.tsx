@@ -207,7 +207,7 @@ export function LandingPage() {
 
   return (
     <ToastProvider>
-      <div className="min-h-screen bg-transparent text-gray-900 overflow-x-hidden">
+      <div className="min-h-screen bg-white text-gray-900 overflow-x-hidden">
         <div className="pointer-events-none fixed inset-0 -z-10">
           <div className="absolute -top-20 left-1/2 h-[520px] w-[780px] -translate-x-1/2 rounded-full bg-gradient-to-r from-gray-900/10 via-gray-900/0 to-gray-900/10 blur-3xl" />
           <div className="absolute top-[55vh] left-[-160px] h-[420px] w-[420px] rounded-full bg-gradient-to-br from-emerald-300/10 to-sky-300/10 blur-3xl" />
@@ -226,7 +226,7 @@ export function LandingPage() {
                   </div>
                 </Reveal>
                 <Reveal delayMs={80}>
-                  <h1 className="mt-5 text-4xl sm:text-6xl font-semibold tracking-tight text-white-900">
+                  <h1 className="mt-5 text-4xl sm:text-6xl font-semibold tracking-tight text-gray-900">
                     Turn Your Website Into an AI Sales Assistant
                   </h1>
                 </Reveal>
@@ -517,7 +517,9 @@ export function LandingPage() {
         <footer className="border-t border-gray-200 bg-white/70 backdrop-blur">
           <div className="mx-auto max-w-6xl px-4 py-10 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-gray-900 to-gray-600 shadow-sm" />
+              <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-gray-900 to-gray-600 shadow-sm grid place-items-center text-white text-sm font-semibold">
+                X
+              </div>
               <div>
                 <div className="text-sm font-semibold text-gray-900">XEPLY AI</div>
                 <div className="text-xs text-gray-500">Turn your website into an AI sales assistant.</div>

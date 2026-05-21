@@ -29,7 +29,9 @@ export function Navbar() {
       >
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-gray-900 to-gray-600 shadow-sm" />
+            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-gray-900 to-gray-600 shadow-sm grid place-items-center text-white text-sm font-semibold">
+              X
+            </div>
             <div className="font-semibold tracking-tight text-gray-900">XEPLY AI</div>
           </Link>
 
