@@ -20,7 +20,7 @@ export default async function DashboardLayout({
       <aside className="w-48 bg-white border-r border-gray-200">
         <div className="p-6">
           <Link href="/dashboard" className="text-xl font-bold">
-            ChatSaaS AI
+            Xeply AI
           </Link>
         </div>
         <nav className="px-4 space-y-2">
