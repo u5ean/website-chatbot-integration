@@ -24,6 +24,9 @@ function isAllowedPublicPath(pathname: string) {
   if (pathname === '/api/waitlist') return true;
   if (pathname === '/api/webhooks/stripe') return true;
   if (pathname === '/api/jobs/process') return true;
+  if (pathname === '/widget.js') return true;
+  if (pathname === '/api/chat') return true;
+  if (pathname === '/api/chatbot/config') return true;
   return false;
 }
 
@@ -95,6 +98,6 @@ export const config = {
      * - favicon.ico (favicon file)
      * Feel free to modify this pattern to include more paths.
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|widget\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

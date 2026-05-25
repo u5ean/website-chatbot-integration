@@ -527,8 +527,8 @@ export function LandingPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-              <a className="hover:text-gray-900" href="mailto:hello@xeplyai.com">
-                hello@xeplyai.com
+              <a className="hover:text-gray-900" href="mailto:hello@kodsea.com">
+                hello@kodsea.com
               </a>
               <a className="hover:text-gray-900" href="https://x.com" target="_blank" rel="noreferrer">
                 X
